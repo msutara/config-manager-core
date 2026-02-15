@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/msutara/config-manager-core/internal/plugin"
+	"github.com/msutara/config-manager-core/plugin"
 )
 
 // Server wraps an HTTP server that serves the CM Core API.

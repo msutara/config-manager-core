@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/msutara/config-manager-core/internal/plugin"
+	"github.com/msutara/config-manager-core/plugin"
 )
 
 // Scheduler manages recurring jobs defined by plugins.

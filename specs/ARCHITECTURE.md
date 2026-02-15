@@ -7,10 +7,10 @@ config-manager-core/
   cmd/
     cm/
       main.go              Entry point
+  plugin/
+    plugin.go              Plugin interface definition (public)
+    registry.go            Plugin registry (public)
   internal/
-    plugin/
-      plugin.go            Plugin interface definition
-      registry.go          Plugin registry
     config/
       config.go            Configuration loading
     api/
@@ -85,7 +85,7 @@ Implements:
 
 ## 4. Plugin system
 
-### 4.1. Interface (`internal/plugin/plugin.go`)
+### 4.1. Interface (`plugin/plugin.go`)
 
 Defines the `Plugin` interface:
 
@@ -99,7 +99,7 @@ type Plugin interface {
 }
 ```
 
-### 4.2. Registry (`internal/plugin/registry.go`)
+### 4.2. Registry (`plugin/registry.go`)
 
 - Global registry populated by plugin `init()` functions.
 - Provides:

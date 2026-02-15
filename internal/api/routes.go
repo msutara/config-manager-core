@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/msutara/config-manager-core/internal/plugin"
+	"github.com/msutara/config-manager-core/plugin"
 )
 
 var (

@@ -22,18 +22,13 @@ In a plugin's Go module, a file (conventionally `register.go` or within
 package cm_plugin_update
 
 import (
-    "github.com/msutara/config-manager-core/internal/plugin"
+    "github.com/msutara/config-manager-core/plugin"
 )
 
 func init() {
     plugin.Register(&UpdatePlugin{})
 }
 ```
-
-> **Note:** The `internal/plugin` import path works only for plugins compiled
-> into the same module. A future phase will expose the plugin interface via a
-> public package (e.g., `github.com/msutara/config-manager-core/plugin`) so
-> that external plugin modules can compile against it independently.
 
 In the core binary's `cmd/cm/main.go`, plugins are imported with a blank
 identifier:
@@ -51,7 +46,7 @@ This triggers each plugin's `init()` function, registering it with the core.
 
 ## 3. Plugin interface
 
-Defined in `internal/plugin/plugin.go`:
+Defined in `plugin/plugin.go`:
 
 ```go
 type Plugin interface {

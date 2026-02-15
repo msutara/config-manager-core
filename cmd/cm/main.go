@@ -16,7 +16,7 @@ import (
 	"github.com/msutara/config-manager-core/internal/api"
 	"github.com/msutara/config-manager-core/internal/config"
 	"github.com/msutara/config-manager-core/internal/logging"
-	"github.com/msutara/config-manager-core/internal/plugin"
+	"github.com/msutara/config-manager-core/plugin"
 	"github.com/msutara/config-manager-core/internal/scheduler"
 
 	// Import plugins here (build-time registration):
