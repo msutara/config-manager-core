@@ -1,0 +1,148 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"os"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/msutara/config-manager-core/internal/plugin"
+)
+
+var startTime = time.Now()
+
+// ErrorResponse is the standard error envelope.
+type ErrorResponse struct {
+	Error ErrorBody `json:"error"`
+}
+
+// ErrorBody holds error details.
+type ErrorBody struct {
+	Code    string      `json:"code"`
+	Message string      `json:"message"`
+	Details interface{} `json:"details"`
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v) //nolint:errcheck
+}
+
+func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, ErrorResponse{
+		Error: ErrorBody{Code: code, Message: message, Details: struct{}{}},
+	})
+}
+
+func handleHealth(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"version": "0.1.0",
+	})
+}
+
+func handleNode(w http.ResponseWriter, _ *http.Request) {
+	hostname, _ := os.Hostname()
+
+	osRelease := "unknown"
+	if data, err := os.ReadFile("/etc/os-release"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "PRETTY_NAME=") {
+				osRelease = strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), "\"")
+				break
+			}
+		}
+	}
+
+	kernel := "unknown"
+	if data, err := os.ReadFile("/proc/version"); err == nil {
+		parts := strings.Fields(string(data))
+		if len(parts) >= 3 {
+			kernel = parts[2]
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"hostname":       hostname,
+		"os":             osRelease,
+		"kernel":         kernel,
+		"uptime_seconds": int(time.Since(startTime).Seconds()),
+		"arch":           runtime.GOARCH,
+	})
+}
+
+func handleListPlugins(w http.ResponseWriter, _ *http.Request) {
+	plugins := plugin.List()
+	meta := make([]plugin.Metadata, 0, len(plugins))
+	for _, p := range plugins {
+		meta = append(meta, plugin.MetadataFrom(p))
+	}
+	writeJSON(w, http.StatusOK, meta)
+}
+
+func handleGetPlugin(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	p, ok := plugin.Get(name)
+	if !ok {
+		writeError(w, http.StatusNotFound, "plugin_not_found",
+			"Plugin '"+name+"' not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, plugin.MetadataFrom(p))
+}
+
+func handleListJobs(w http.ResponseWriter, _ *http.Request) {
+	jobs := plugin.AllJobs()
+	type jobResponse struct {
+		ID          string `json:"id"`
+		Plugin      string `json:"plugin"`
+		Description string `json:"description"`
+		Schedule    string `json:"schedule"`
+	}
+
+	result := make([]jobResponse, 0, len(jobs))
+	for _, j := range jobs {
+		parts := strings.SplitN(j.ID, ".", 2)
+		pluginName := ""
+		if len(parts) > 0 {
+			pluginName = parts[0]
+		}
+		result = append(result, jobResponse{
+			ID:          j.ID,
+			Plugin:      pluginName,
+			Description: j.Description,
+			Schedule:    j.Cron,
+		})
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func handleTriggerJob(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		JobID string `json:"job_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body")
+		return
+	}
+
+	jobs := plugin.AllJobs()
+	for _, j := range jobs {
+		if j.ID == req.JobID {
+			// Trigger asynchronously
+			go j.Func() //nolint:errcheck
+			writeJSON(w, http.StatusAccepted, map[string]string{
+				"status": "accepted",
+				"job_id": req.JobID,
+			})
+			return
+		}
+	}
+
+	writeError(w, http.StatusNotFound, "job_not_found",
+		"Job '"+req.JobID+"' not found")
+}
