@@ -180,7 +180,7 @@ Trigger a job by ID.
 
 Each plugin is mounted under:
 
-```txt
+```text
 /api/v1/plugins/{plugin_name}
 ```
 
@@ -203,7 +203,7 @@ Initial version runs without auth on localhost only.
 Later, optional auth modes:
 
 - Shared token in header:
-  ```txt
+  ```text
   Authorization: Bearer <token>
   ```
 - Basic auth for simple setups.

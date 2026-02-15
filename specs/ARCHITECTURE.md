@@ -2,7 +2,7 @@
 
 ## 1. Directory layout
 
-```txt
+```text
 config-manager-core/
   cmd/
     cm/

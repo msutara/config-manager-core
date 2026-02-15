@@ -46,7 +46,10 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func handleNode(w http.ResponseWriter, _ *http.Request) {
-	hostname, _ := os.Hostname()
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
 
 	osRelease := "unknown"
 	if data, err := os.ReadFile("/etc/os-release"); err == nil {
