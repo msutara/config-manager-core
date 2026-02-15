@@ -2,7 +2,7 @@
 
 ## CLI Options
 
-```text
+```txt
 Usage: cm [OPTIONS]
 
 Options:

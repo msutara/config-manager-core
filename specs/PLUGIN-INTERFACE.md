@@ -116,7 +116,7 @@ CM Core will:
 2. Call `Routes()` on each.
 3. Mount the returned handler under:
 
-```text
+```txt
 /api/v1/plugins/{plugin_name}/<handler_paths>
 ```
 

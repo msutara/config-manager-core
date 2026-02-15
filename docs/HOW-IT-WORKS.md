@@ -9,7 +9,7 @@ Config Manager Core is a single Go binary that embeds:
 - A **REST API** (Chi) running in a background goroutine.
 - A **job scheduler** for recurring plugin tasks.
 
-```text
+```txt
 ┌─────────────────────────────────────┐
 │              cm binary              │
 │                                     │
