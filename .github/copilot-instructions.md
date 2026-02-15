@@ -11,7 +11,7 @@ Target platforms: Raspbian Bookworm (ARM64), Debian Bullseye slim.
 - **Entry point**: `cmd/cm/main.go` — parses flags, loads config, initializes plugins/scheduler/API, starts TUI
 - **Plugin interface**: `plugin/plugin.go` — defines the `Plugin` interface that all plugins implement
 - **Plugin registry**: `plugin/registry.go` — global registry; plugins self-register via `init()`
-- **Configuration**: `internal/config/config.go` — YAML config with struct tags, env overrides
+- **Configuration**: `internal/config/config.go` — YAML config with struct tags
 - **API server**: `internal/api/server.go` — Chi router, runs in a goroutine alongside TUI
 - **API routes**: `internal/api/routes.go` — core endpoints: health, node info, plugins, jobs
 - **Scheduler**: `internal/scheduler/scheduler.go` — registers and triggers plugin-defined jobs

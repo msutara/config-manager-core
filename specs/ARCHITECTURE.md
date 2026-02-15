@@ -139,7 +139,7 @@ type Plugin interface {
 ## 7. Startup sequence
 
 1. Parse CLI flags.
-2. Load configuration from YAML + env overrides.
+2. Load configuration from YAML file.
 3. Initialize structured logging.
 4. Collect registered plugins from the global registry.
 5. Initialize scheduler and register plugin jobs.
