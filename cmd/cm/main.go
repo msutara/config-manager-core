@@ -48,6 +48,7 @@ func main() {
 
 	// Initialize logging
 	logging.Setup(cfg.LogLevel)
+	api.Version = version
 	slog.Info("starting cm", "version", version)
 
 	// Log registered plugins

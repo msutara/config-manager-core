@@ -1,8 +1,8 @@
 package plugin
 
 import (
-	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 )
 
@@ -12,15 +12,20 @@ var (
 )
 
 // Register adds a plugin to the global registry. It is intended to be called
-// from a plugin's init() function. Panics if a plugin with the same name is
-// already registered.
+// from a plugin's init() function. If a plugin with the same name is already
+// registered, the duplicate is logged and skipped.
 func Register(p Plugin) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	name := p.Name()
+	if name == "" {
+		slog.Warn("plugin registration skipped: empty name")
+		return
+	}
 	if _, exists := registry[name]; exists {
-		panic(fmt.Sprintf("plugin %q already registered", name))
+		slog.Warn("duplicate plugin registration skipped", "plugin", name)
+		return
 	}
 	registry[name] = p
 	slog.Info("plugin registered", "plugin", name, "version", p.Version())
@@ -47,16 +52,26 @@ func List() []Plugin {
 	return plugins
 }
 
-// AllRoutes returns a map of plugin name to HTTP handler for all plugins
-// that provide routes.
-func AllRoutes() map[string]Plugin {
+// AllRoutes returns a map of plugin name to http.Handler for all plugins
+// that provide routes. Handlers are computed once to avoid double evaluation.
+func AllRoutes() map[string]http.Handler {
 	mu.RLock()
-	defer mu.RUnlock()
-
-	routes := make(map[string]Plugin)
+	plugins := make([]struct {
+		name   string
+		plugin Plugin
+	}, 0, len(registry))
 	for name, p := range registry {
-		if p.Routes() != nil {
-			routes[name] = p
+		plugins = append(plugins, struct {
+			name   string
+			plugin Plugin
+		}{name, p})
+	}
+	mu.RUnlock()
+
+	routes := make(map[string]http.Handler)
+	for _, entry := range plugins {
+		if handler := entry.plugin.Routes(); handler != nil {
+			routes[entry.name] = handler
 		}
 	}
 	return routes

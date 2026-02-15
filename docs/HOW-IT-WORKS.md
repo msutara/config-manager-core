@@ -52,5 +52,5 @@ Plugins are separate Go modules compiled into the core binary at build time:
 
 ## Configuration
 
-YAML-based configuration with environment variable overrides.
+YAML-based configuration loaded from a YAML file.
 See [USAGE.md](USAGE.md) for details.

@@ -17,10 +17,26 @@ type Server struct {
 	httpServer *http.Server
 }
 
+// slogLogger is a Chi middleware that logs HTTP requests using log/slog.
+func slogLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+		slog.Info("http_request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", ww.Status(),
+			"bytes_written", ww.BytesWritten(),
+			"duration", time.Since(start),
+		)
+	})
+}
+
 // NewServer creates a new API server with core and plugin routes mounted.
 func NewServer(host string, port int) *Server {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
 
 	// Core routes
@@ -33,11 +49,10 @@ func NewServer(host string, port int) *Server {
 		r.Post("/jobs/trigger", handleTriggerJob)
 	})
 
-	// Plugin routes
-	for name, p := range plugin.AllRoutes() {
-		if handler := p.Routes(); handler != nil {
-			r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
-		}
+	// Plugin routes — compute handlers once, outside the registry lock.
+	pluginRoutes := plugin.AllRoutes()
+	for name, handler := range pluginRoutes {
+		r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
 	}
 
 	return &Server{
@@ -45,6 +60,9 @@ func NewServer(host string, port int) *Server {
 			Addr:              fmt.Sprintf("%s:%d", host, port),
 			Handler:           r,
 			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		},
 	}
 }

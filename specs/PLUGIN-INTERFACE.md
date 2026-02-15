@@ -30,6 +30,11 @@ func init() {
 }
 ```
 
+> **Note:** The `internal/plugin` import path works only for plugins compiled
+> into the same module. A future phase will expose the plugin interface via a
+> public package (e.g., `github.com/msutara/config-manager-core/plugin`) so
+> that external plugin modules can compile against it independently.
+
 In the core binary's `cmd/cm/main.go`, plugins are imported with a blank
 identifier:
 

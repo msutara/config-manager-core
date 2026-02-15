@@ -8,7 +8,7 @@ Usage: cm [OPTIONS]
 Options:
   --config PATH   Path to config file (default: /etc/cm/config.yaml)
   --version       Show version and exit
-  -h, --help      Show help message
+  -help, --help   Show help message
 ```
 
 ## Configuration

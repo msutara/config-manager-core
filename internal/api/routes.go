@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime"
@@ -12,7 +13,12 @@ import (
 	"github.com/msutara/config-manager-core/internal/plugin"
 )
 
-var startTime = time.Now()
+var (
+	startTime = time.Now()
+
+	// Version is set by the main package at startup.
+	Version = "0.1.0"
+)
 
 // ErrorResponse is the standard error envelope.
 type ErrorResponse struct {
@@ -41,7 +47,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
-		"version": "0.1.0",
+		"version": Version,
 	})
 }
 
@@ -101,10 +107,11 @@ func handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 func handleListJobs(w http.ResponseWriter, _ *http.Request) {
 	jobs := plugin.AllJobs()
 	type jobResponse struct {
-		ID          string `json:"id"`
-		Plugin      string `json:"plugin"`
-		Description string `json:"description"`
-		Schedule    string `json:"schedule"`
+		ID          string  `json:"id"`
+		Plugin      string  `json:"plugin"`
+		Description string  `json:"description"`
+		Schedule    *string `json:"schedule"`
+		NextRunTime *string `json:"next_run_time"`
 	}
 
 	result := make([]jobResponse, 0, len(jobs))
@@ -114,11 +121,17 @@ func handleListJobs(w http.ResponseWriter, _ *http.Request) {
 		if len(parts) > 0 {
 			pluginName = parts[0]
 		}
+		var sched *string
+		if j.Cron != "" {
+			s := j.Cron
+			sched = &s
+		}
 		result = append(result, jobResponse{
 			ID:          j.ID,
 			Plugin:      pluginName,
 			Description: j.Description,
-			Schedule:    j.Cron,
+			Schedule:    sched,
+			NextRunTime: nil, // Phase 2: computed from cron expression
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -136,8 +149,15 @@ func handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 	jobs := plugin.AllJobs()
 	for _, j := range jobs {
 		if j.ID == req.JobID {
-			// Trigger asynchronously
-			go j.Func() //nolint:errcheck
+			jf := j.Func
+			jid := j.ID
+			go func() {
+				if err := jf(); err != nil {
+					slog.Error("triggered job failed", "job_id", jid, "error", err)
+				} else {
+					slog.Info("triggered job completed", "job_id", jid)
+				}
+			}()
 			writeJSON(w, http.StatusAccepted, map[string]string{
 				"status": "accepted",
 				"job_id": req.JobID,

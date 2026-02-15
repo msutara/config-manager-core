@@ -49,14 +49,15 @@ config-manager-core/
 ### 2.2. Configuration (`internal/config/config.go`)
 
 - Go struct with YAML tags.
-- Sources:
+- Sources (Phase 1):
   - Config file (YAML, default `/etc/cm/config.yaml`).
-  - Environment variables (override).
-- Key settings:
+  - (Planned) Environment variables for overrides in a later phase.
+- Key settings (Phase 1 implementation):
   - `listen_host`, `listen_port`
-  - `auth_mode`, `auth_token` (future)
   - `enabled_plugins` (optional, all enabled by default)
   - `log_level`
+- Planned future settings:
+  - `auth_mode`, `auth_token`
 
 ---
 
