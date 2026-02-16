@@ -1,0 +1,101 @@
+package plugin
+
+import (
+	"log/slog"
+	"net/http"
+	"sync"
+)
+
+var (
+	mu       sync.RWMutex
+	registry = make(map[string]Plugin)
+)
+
+// Register adds a plugin to the global registry. It is intended to be called
+// from a plugin's init() function. If a plugin with the same name is already
+// registered, the duplicate is logged and skipped.
+func Register(p Plugin) {
+	if p == nil {
+		slog.Warn("plugin registration skipped: nil plugin")
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	name := p.Name()
+	if name == "" {
+		slog.Warn("plugin registration skipped: empty name")
+		return
+	}
+	if _, exists := registry[name]; exists {
+		slog.Warn("duplicate plugin registration skipped", "plugin", name)
+		return
+	}
+	registry[name] = p
+	slog.Info("plugin registered", "plugin", name, "version", p.Version())
+}
+
+// Get returns a plugin by name and a boolean indicating whether it was found.
+func Get(name string) (Plugin, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	p, ok := registry[name]
+	return p, ok
+}
+
+// List returns all registered plugins.
+func List() []Plugin {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	plugins := make([]Plugin, 0, len(registry))
+	for _, p := range registry {
+		plugins = append(plugins, p)
+	}
+	return plugins
+}
+
+// AllRoutes returns a map of plugin name to http.Handler for all plugins
+// that provide routes. Handlers are computed once to avoid double evaluation.
+func AllRoutes() map[string]http.Handler {
+	mu.RLock()
+	plugins := make([]struct {
+		name   string
+		plugin Plugin
+	}, 0, len(registry))
+	for name, p := range registry {
+		plugins = append(plugins, struct {
+			name   string
+			plugin Plugin
+		}{name, p})
+	}
+	mu.RUnlock()
+
+	routes := make(map[string]http.Handler)
+	for _, entry := range plugins {
+		if handler := entry.plugin.Routes(); handler != nil {
+			routes[entry.name] = handler
+		}
+	}
+	return routes
+}
+
+// AllJobs returns all job definitions from all registered plugins.
+// Plugin code (ScheduledJobs) is called outside the lock to avoid blocking
+// other registry operations.
+func AllJobs() []JobDefinition {
+	mu.RLock()
+	plugins := make([]Plugin, 0, len(registry))
+	for _, p := range registry {
+		plugins = append(plugins, p)
+	}
+	mu.RUnlock()
+
+	var jobs []JobDefinition
+	for _, p := range plugins {
+		jobs = append(jobs, p.ScheduledJobs()...)
+	}
+	return jobs
+}
