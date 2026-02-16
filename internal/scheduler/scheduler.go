@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -58,6 +59,9 @@ func (s *Scheduler) TriggerJob(id string) error {
 	}
 
 	slog.Info("triggering job", "job_id", id)
+	if j.Func == nil {
+		return fmt.Errorf("job %q has no function defined", id)
+	}
 	return j.Func()
 }
 

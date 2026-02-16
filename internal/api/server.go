@@ -15,6 +15,12 @@ import (
 // Server wraps an HTTP server that serves the CM Core API.
 type Server struct {
 	httpServer *http.Server
+	scheduler  JobTriggerer
+}
+
+// JobTriggerer is satisfied by the scheduler to trigger jobs by ID.
+type JobTriggerer interface {
+	TriggerJob(id string) error
 }
 
 // slogLogger is a Chi middleware that logs HTTP requests using log/slog.
@@ -34,10 +40,12 @@ func slogLogger(next http.Handler) http.Handler {
 }
 
 // NewServer creates a new API server with core and plugin routes mounted.
-func NewServer(host string, port int) *Server {
+func NewServer(host string, port int, sched JobTriggerer) *Server {
 	r := chi.NewRouter()
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
+
+	s := &Server{scheduler: sched}
 
 	// Core routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -46,7 +54,7 @@ func NewServer(host string, port int) *Server {
 		r.Get("/plugins", handleListPlugins)
 		r.Get("/plugins/{name}", handleGetPlugin)
 		r.Get("/jobs", handleListJobs)
-		r.Post("/jobs/trigger", handleTriggerJob)
+		r.Post("/jobs/trigger", s.handleTriggerJob)
 	})
 
 	// Plugin routes — compute handlers once, outside the registry lock.
@@ -55,16 +63,16 @@ func NewServer(host string, port int) *Server {
 		r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
 	}
 
-	return &Server{
-		httpServer: &http.Server{
-			Addr:              fmt.Sprintf("%s:%d", host, port),
-			Handler:           r,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		},
+	s.httpServer = &http.Server{
+		Addr:              fmt.Sprintf("%s:%d", host, port),
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
+
+	return s
 }
 
 // Start begins listening in a goroutine. Call Shutdown to stop.

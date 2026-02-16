@@ -137,7 +137,7 @@ func handleListJobs(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-func handleTriggerJob(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		JobID string `json:"job_id"`
 	}
@@ -146,26 +146,21 @@ func handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs := plugin.AllJobs()
-	for _, j := range jobs {
-		if j.ID == req.JobID {
-			jf := j.Func
-			jid := j.ID
-			go func() {
-				if err := jf(); err != nil {
-					slog.Error("triggered job failed", "job_id", jid, "error", err)
-				} else {
-					slog.Info("triggered job completed", "job_id", jid)
-				}
-			}()
-			writeJSON(w, http.StatusAccepted, map[string]string{
-				"status": "accepted",
-				"job_id": req.JobID,
-			})
-			return
-		}
+	if s.scheduler == nil {
+		writeError(w, http.StatusInternalServerError, "scheduler_unavailable", "Scheduler not configured")
+		return
 	}
 
-	writeError(w, http.StatusNotFound, "job_not_found",
-		"Job '"+req.JobID+"' not found")
+	jid := req.JobID
+	go func() {
+		if err := s.scheduler.TriggerJob(jid); err != nil {
+			slog.Error("triggered job failed", "job_id", jid, "error", err)
+		} else {
+			slog.Info("triggered job completed", "job_id", jid)
+		}
+	}()
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"status": "accepted",
+		"job_id": req.JobID,
+	})
 }

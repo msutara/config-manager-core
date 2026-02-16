@@ -68,7 +68,7 @@ func main() {
 	sched.Start()
 
 	// Start API server
-	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort)
+	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched)
 	srv.Start()
 
 	// Wait for interrupt signal
