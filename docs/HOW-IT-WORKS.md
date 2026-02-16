@@ -5,7 +5,7 @@
 Config Manager Core is a single Go binary that embeds:
 
 - A **plugin registry** for modular functionality.
-- A **TUI** (Bubble Tea) as the primary interface.
+- A **TUI** (Bubble Tea) as the primary interface (planned, Phase 2).
 - A **REST API** (Chi) running in a background goroutine.
 - A **job scheduler** for recurring plugin tasks.
 
@@ -47,8 +47,9 @@ Plugins are separate Go modules compiled into the core binary at build time:
 4. Collect registered plugins from the global registry.
 5. Initialize scheduler and register plugin jobs.
 6. Start REST API server in a background goroutine.
-7. Start TUI as the main blocking loop.
-8. On exit: gracefully shut down API server and scheduler.
+7. (Phase 2) Start TUI as the main blocking loop.
+8. Block until SIGINT/SIGTERM (Phase 1) or TUI exit (Phase 2).
+9. On exit: gracefully shut down API server and scheduler.
 
 ## Configuration
 

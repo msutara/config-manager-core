@@ -44,7 +44,8 @@ config-manager-core/
 - Initializes plugin registry (plugins self-register via `init()`).
 - Initializes scheduler and registers plugin jobs.
 - Starts HTTP API server in a background goroutine.
-- Starts TUI (Bubble Tea) as the main loop.
+- (Phase 2) Starts TUI (Bubble Tea) as the main loop.
+- (Phase 1) Blocks on signal (SIGINT/SIGTERM) until shutdown.
 
 ### 2.2. Configuration (`internal/config/config.go`)
 
