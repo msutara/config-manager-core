@@ -19,7 +19,7 @@ In a plugin's Go module, a file (conventionally `register.go` or within
 `plugin.go`) calls the core registry during `init()`:
 
 ```go
-package cm_plugin_update
+package update
 
 import (
     "github.com/msutara/config-manager-core/plugin"
