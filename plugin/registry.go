@@ -15,6 +15,11 @@ var (
 // from a plugin's init() function. If a plugin with the same name is already
 // registered, the duplicate is logged and skipped.
 func Register(p Plugin) {
+	if p == nil {
+		slog.Warn("plugin registration skipped: nil plugin")
+		return
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -78,12 +83,18 @@ func AllRoutes() map[string]http.Handler {
 }
 
 // AllJobs returns all job definitions from all registered plugins.
+// Plugin code (ScheduledJobs) is called outside the lock to avoid blocking
+// other registry operations.
 func AllJobs() []JobDefinition {
 	mu.RLock()
-	defer mu.RUnlock()
+	plugins := make([]Plugin, 0, len(registry))
+	for _, p := range registry {
+		plugins = append(plugins, p)
+	}
+	mu.RUnlock()
 
 	var jobs []JobDefinition
-	for _, p := range registry {
+	for _, p := range plugins {
 		jobs = append(jobs, p.ScheduledJobs()...)
 	}
 	return jobs

@@ -27,6 +27,10 @@ func (s *Scheduler) RegisterJobs(jobs []plugin.JobDefinition) {
 	defer s.mu.Unlock()
 
 	for _, j := range jobs {
+		if j.ID == "" {
+			slog.Warn("job registration skipped: empty ID")
+			continue
+		}
 		if _, exists := s.jobs[j.ID]; exists {
 			slog.Warn("duplicate job ID; registration skipped", "job_id", j.ID, "cron", j.Cron)
 			continue
