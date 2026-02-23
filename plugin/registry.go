@@ -82,6 +82,14 @@ func AllRoutes() map[string]http.Handler {
 	return routes
 }
 
+// ResetForTesting clears the global registry. It is exported so that tests in
+// other packages (e.g., internal/api) can reset state between test cases.
+func ResetForTesting() {
+	mu.Lock()
+	defer mu.Unlock()
+	registry = make(map[string]Plugin)
+}
+
 // AllJobs returns all job definitions from all registered plugins.
 // Plugin code (ScheduledJobs) is called outside the lock to avoid blocking
 // other registry operations.
