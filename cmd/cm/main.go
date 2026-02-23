@@ -16,13 +16,11 @@ import (
 	"github.com/msutara/config-manager-core/internal/api"
 	"github.com/msutara/config-manager-core/internal/config"
 	"github.com/msutara/config-manager-core/internal/logging"
-	"github.com/msutara/config-manager-core/plugin"
 	"github.com/msutara/config-manager-core/internal/scheduler"
-
+	"github.com/msutara/config-manager-core/plugin"
 	// Import plugins here (build-time registration):
 	// _ "github.com/msutara/cm-plugin-update"
 	// _ "github.com/msutara/cm-plugin-network"
-
 	// Import TUI:
 	// _ "github.com/msutara/config-manager-tui"
 )

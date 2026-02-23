@@ -84,4 +84,6 @@ var ErrJobNotFound = &jobNotFoundError{}
 
 type jobNotFoundError struct{}
 
-func (e *jobNotFoundError) Error() string { return "job not found" }
+func (e *jobNotFoundError) Error() string {
+	return "job not found"
+}
