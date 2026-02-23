@@ -14,11 +14,25 @@ type fakePlugin struct {
 	jobs    []JobDefinition
 }
 
-func (f *fakePlugin) Name() string                   { return f.name }
-func (f *fakePlugin) Version() string                { return f.version }
-func (f *fakePlugin) Description() string            { return f.desc }
-func (f *fakePlugin) Routes() http.Handler           { return f.routes }
-func (f *fakePlugin) ScheduledJobs() []JobDefinition { return f.jobs }
+func (f *fakePlugin) Name() string {
+	return f.name
+}
+
+func (f *fakePlugin) Version() string {
+	return f.version
+}
+
+func (f *fakePlugin) Description() string {
+	return f.desc
+}
+
+func (f *fakePlugin) Routes() http.Handler {
+	return f.routes
+}
+
+func (f *fakePlugin) ScheduledJobs() []JobDefinition {
+	return f.jobs
+}
 
 func newFake(name string) *fakePlugin {
 	return &fakePlugin{name: name, version: "1.0.0", desc: name + " plugin"}

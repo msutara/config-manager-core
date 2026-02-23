@@ -23,7 +23,9 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	cfg, err := Load("/nonexistent/path/config.yaml")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nonexistent.yaml")
+	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,7 +83,12 @@ func TestLoadInvalidYAML(t *testing.T) {
 }
 
 func TestLoadEmptyPath(t *testing.T) {
-	// Empty path falls back to defaultConfigPath which doesn't exist on test machines
+	// Empty path falls back to defaultConfigPath (/etc/cm/config.yaml).
+	// On most test machines this doesn't exist, so we get defaults.
+	// Skip if it happens to exist to keep the test hermetic.
+	if _, err := os.Stat("/etc/cm/config.yaml"); err == nil {
+		t.Skip("default config path exists; skipping hermetic test")
+	}
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
