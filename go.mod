@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/go-chi/chi/v5 v5.2.1
-	github.com/msutara/config-manager-tui v0.0.0-20260224193344-05c0512f6aa2
+	github.com/msutara/config-manager-tui v0.0.0-20260224224423-3da4350f9aa2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -29,5 +29,3 @@ require (
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )
-
-replace github.com/msutara/config-manager-tui => ../config-manager-tui

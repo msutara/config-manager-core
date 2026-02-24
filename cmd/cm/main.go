@@ -114,8 +114,8 @@ func main() {
 	// corrupt the TUI alternate screen.
 	go func() {
 		if err := <-srv.Err(); err != nil {
+			exitFailed.Store(true) // set before slog to avoid preemption race
 			slog.Error("API server failed", "error", err)
-			exitFailed.Store(true)
 			prog.Kill()
 		}
 	}()
@@ -133,9 +133,10 @@ func main() {
 	}()
 
 	if _, err := prog.Run(); err != nil {
-		// ErrInterrupted is normal (user Ctrl+C); ErrProgramKilled is handled
-		// by the API monitor goroutine which already sets exitFailed.
-		// ErrProgramPanic wraps ErrProgramKilled, so check it first.
+		// On panic, Run() returns fmt.Errorf("%w: %w", ErrProgramKilled, ErrProgramPanic).
+		// errors.Is(err, ErrProgramKilled) is therefore TRUE for panics.
+		// Check ErrProgramPanic first so the else-if's ErrProgramKilled exclusion
+		// doesn't silently swallow a crash.
 		if errors.Is(err, tea.ErrProgramPanic) {
 			slog.Error("TUI crashed (panic)", "error", err)
 			exitFailed.Store(true)
