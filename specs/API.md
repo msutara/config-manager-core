@@ -125,7 +125,7 @@ List scheduled jobs from all plugins.
     "plugin": "update",
     "description": "Run security updates",
     "schedule": "0 3 * * *",
-    "next_run_time": "2026-02-16T03:00:00Z"
+    "next_run_time": null
   },
   {
     "id": "update.run_full",
@@ -136,6 +136,9 @@ List scheduled jobs from all plugins.
   }
 ]
 ```
+
+> **Note:** `next_run_time` is always `null` in the current implementation.
+> It will be computed from the cron expression in a future phase.
 
 ---
 

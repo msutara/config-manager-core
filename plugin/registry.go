@@ -3,6 +3,7 @@ package plugin
 import (
 	"log/slog"
 	"net/http"
+	"sort"
 	"sync"
 )
 
@@ -45,7 +46,7 @@ func Get(name string) (Plugin, bool) {
 	return p, ok
 }
 
-// List returns all registered plugins.
+// List returns all registered plugins in deterministic (name-sorted) order.
 func List() []Plugin {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -54,6 +55,9 @@ func List() []Plugin {
 	for _, p := range registry {
 		plugins = append(plugins, p)
 	}
+	sort.Slice(plugins, func(i, j int) bool {
+		return plugins[i].Name() < plugins[j].Name()
+	})
 	return plugins
 }
 
@@ -90,7 +94,31 @@ func ResetForTesting() {
 	registry = make(map[string]Plugin)
 }
 
+// DisableExcept removes all plugins from the registry whose names are not in
+// the provided allowlist. If allowlist is empty, all plugins remain active.
+func DisableExcept(allowlist []string) {
+	if len(allowlist) == 0 {
+		return
+	}
+
+	allowed := make(map[string]bool, len(allowlist))
+	for _, n := range allowlist {
+		allowed[n] = true
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	for name := range registry {
+		if !allowed[name] {
+			slog.Info("plugin disabled by config", "plugin", name)
+			delete(registry, name)
+		}
+	}
+}
+
 // AllJobs returns all job definitions from all registered plugins.
+// Jobs are sorted by ID for deterministic ordering.
 // Plugin code (ScheduledJobs) is called outside the lock to avoid blocking
 // other registry operations.
 func AllJobs() []JobDefinition {
@@ -105,5 +133,8 @@ func AllJobs() []JobDefinition {
 	for _, p := range plugins {
 		jobs = append(jobs, p.ScheduledJobs()...)
 	}
+	sort.Slice(jobs, func(i, j int) bool {
+		return jobs[i].ID < jobs[j].ID
+	})
 	return jobs
 }

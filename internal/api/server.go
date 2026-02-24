@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,11 +17,13 @@ import (
 type Server struct {
 	httpServer *http.Server
 	scheduler  JobTriggerer
+	startTime  time.Time
 }
 
 // JobTriggerer is satisfied by the scheduler to trigger jobs by ID.
 type JobTriggerer interface {
 	TriggerJob(id string) error
+	JobExists(id string) bool
 }
 
 // slogLogger is a Chi middleware that logs HTTP requests using log/slog.
@@ -45,12 +48,12 @@ func NewServer(host string, port int, sched JobTriggerer) *Server {
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
 
-	s := &Server{scheduler: sched}
+	s := &Server{scheduler: sched, startTime: time.Now()}
 
 	// Core routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", handleHealth)
-		r.Get("/node", handleNode)
+		r.Get("/node", s.handleNode)
 		r.Get("/plugins", handleListPlugins)
 		r.Get("/plugins/{name}", handleGetPlugin)
 		r.Get("/jobs", handleListJobs)
@@ -76,11 +79,13 @@ func NewServer(host string, port int, sched JobTriggerer) *Server {
 }
 
 // Start begins listening in a goroutine. Call Shutdown to stop.
+// If the server fails to bind (e.g. port in use), the process exits.
 func (s *Server) Start() {
 	go func() {
 		slog.Info("API server starting", "addr", s.httpServer.Addr)
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("API server error", "error", err)
+			slog.Error("API server error — exiting", "error", err)
+			os.Exit(1)
 		}
 	}()
 }

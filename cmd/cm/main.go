@@ -60,6 +60,9 @@ func main() {
 		)
 	}
 
+	// Apply enabled_plugins filter from config
+	plugin.DisableExcept(cfg.EnabledPlugins)
+
 	// Initialize scheduler
 	sched := scheduler.New()
 	sched.RegisterJobs(plugin.AllJobs())
