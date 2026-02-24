@@ -5,11 +5,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -18,6 +21,9 @@ import (
 	"github.com/msutara/config-manager-core/internal/logging"
 	"github.com/msutara/config-manager-core/internal/scheduler"
 	"github.com/msutara/config-manager-core/plugin"
+
+	tea "github.com/charmbracelet/bubbletea"
+	tui "github.com/msutara/config-manager-tui"
 	// Plugins are registered explicitly below in main().
 	// Uncomment when plugin modules are added to go.mod:
 	// update "github.com/msutara/cm-plugin-update"
@@ -43,8 +49,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize logging
-	logging.Setup(cfg.LogLevel)
+	// Initialize logging — redirect to file so TUI display is not corrupted.
+	logFile, err := tea.LogToFile("cm-debug.log", "cm")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", err)
+		logging.Setup(cfg.LogLevel, io.Discard)
+	} else {
+		defer logFile.Close()
+		logging.Setup(cfg.LogLevel, logFile)
+	}
 	api.Version = version
 	slog.Info("starting cm", "version", version)
 
@@ -76,21 +89,76 @@ func main() {
 	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched)
 	srv.Start()
 
-	// Wait for interrupt signal or server error
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	// Build TUI plugin info from registered plugins
+	var tuiPlugins []tui.PluginInfo
+	for _, p := range plugins {
+		tuiPlugins = append(tuiPlugins, tui.PluginInfo{
+			Name:        p.Name(),
+			Description: p.Description(),
+		})
+	}
 
-	// TODO: Start TUI here (Phase 2)
-	// For now, block until signal or fatal server error
-	slog.Info("cm is running (TUI not yet implemented, press Ctrl+C to stop)",
+	// Start TUI as the main blocking loop
+	slog.Info("starting TUI",
 		"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
+		"plugins", len(tuiPlugins),
 	)
-	select {
-	case <-sigCh:
+	model := tui.New(tuiPlugins)
+	prog := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Track whether a fatal error occurred (API failure or TUI crash).
+	var exitFailed atomic.Bool
+
+	// Monitor API server for fatal startup errors (e.g., port in use).
+	// Stderr output is deferred to after prog.Run() returns so it doesn't
+	// corrupt the TUI alternate screen.
+	go func() {
+		if err := <-srv.Err(); err != nil {
+			slog.Error("API server failed", "error", err)
+			exitFailed.Store(true)
+			prog.Kill()
+		}
+	}()
+
+	// Forward SIGINT/SIGTERM to TUI for graceful shutdown.
+	// After the first signal, stop intercepting so a second signal
+	// terminates immediately via the OS default handler.
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
 		slog.Info("received shutdown signal")
+		prog.Quit()
+		signal.Stop(sigCh)
+	}()
+
+	if _, err := prog.Run(); err != nil {
+		// ErrInterrupted is normal (user Ctrl+C); ErrProgramKilled is handled
+		// by the API monitor goroutine which already sets exitFailed.
+		// ErrProgramPanic wraps ErrProgramKilled, so check it first.
+		if errors.Is(err, tea.ErrProgramPanic) {
+			slog.Error("TUI crashed (panic)", "error", err)
+			exitFailed.Store(true)
+		} else if !errors.Is(err, tea.ErrInterrupted) && !errors.Is(err, tea.ErrProgramKilled) {
+			slog.Error("TUI exited with error", "error", err)
+			exitFailed.Store(true)
+		}
+	}
+
+	// Drain any API error that the monitor goroutine may not have processed
+	// yet (e.g., signal-induced exit raced with API failure).
+	select {
 	case err := <-srv.Err():
-		slog.Error("API server failed to start", "error", err)
-		os.Exit(1)
+		if err != nil {
+			slog.Error("API server failed", "error", err)
+			exitFailed.Store(true)
+		}
+	default:
+	}
+
+	// Now that the TUI has restored the terminal, report fatal errors.
+	if exitFailed.Load() {
+		fmt.Fprintln(os.Stderr, "fatal: exiting due to startup error (see cm-debug.log)")
 	}
 
 	// Graceful shutdown
@@ -102,4 +170,8 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("goodbye")
+
+	if exitFailed.Load() {
+		os.Exit(1)
+	}
 }
