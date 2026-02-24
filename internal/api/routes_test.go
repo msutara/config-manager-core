@@ -14,6 +14,7 @@ import (
 // mockScheduler implements JobTriggerer for testing.
 type mockScheduler struct {
 	triggerFunc func(id string) error
+	existsFunc  func(id string) bool
 }
 
 func (m *mockScheduler) TriggerJob(id string) error {
@@ -21,6 +22,13 @@ func (m *mockScheduler) TriggerJob(id string) error {
 		return m.triggerFunc(id)
 	}
 	return nil
+}
+
+func (m *mockScheduler) JobExists(id string) bool {
+	if m.existsFunc != nil {
+		return m.existsFunc(id)
+	}
+	return true
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -42,9 +50,11 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleNode(t *testing.T) {
+	plugin.ResetForTesting()
+	srv := NewServer("localhost", 0, nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
-	handleNode(w, r)
+	srv.handleNode(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", w.Code, http.StatusOK)
@@ -170,6 +180,9 @@ func TestNewServerIntegration(t *testing.T) {
 		triggerFunc: func(_ string) error {
 			return errors.New("not found")
 		},
+		existsFunc: func(_ string) bool {
+			return true
+		},
 	}
 	srv := NewServer("localhost", 0, sched)
 	if srv == nil {
@@ -183,5 +196,36 @@ func TestNewServerIntegration(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestHandleTriggerJobNotFound(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool {
+			return false
+		},
+	}
+	srv := &Server{scheduler: sched}
+	body := `{"job_id": "no.such.job"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/trigger",
+		bytes.NewBufferString(body))
+	srv.handleTriggerJob(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got status %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestHandleTriggerJobEmptyID(t *testing.T) {
+	sched := &mockScheduler{}
+	srv := &Server{scheduler: sched}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/trigger",
+		bytes.NewBufferString(`{"job_id": ""}`))
+	srv.handleTriggerJob(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }

@@ -16,11 +16,19 @@ import (
 type Server struct {
 	httpServer *http.Server
 	scheduler  JobTriggerer
+	startTime  time.Time
+	errCh      chan error
+}
+
+// Err returns a read-only channel that receives fatal start-up errors.
+func (s *Server) Err() <-chan error {
+	return s.errCh
 }
 
 // JobTriggerer is satisfied by the scheduler to trigger jobs by ID.
 type JobTriggerer interface {
 	TriggerJob(id string) error
+	JobExists(id string) bool
 }
 
 // slogLogger is a Chi middleware that logs HTTP requests using log/slog.
@@ -45,12 +53,12 @@ func NewServer(host string, port int, sched JobTriggerer) *Server {
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
 
-	s := &Server{scheduler: sched}
+	s := &Server{scheduler: sched, startTime: time.Now(), errCh: make(chan error, 1)}
 
 	// Core routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", handleHealth)
-		r.Get("/node", handleNode)
+		r.Get("/node", s.handleNode)
 		r.Get("/plugins", handleListPlugins)
 		r.Get("/plugins/{name}", handleGetPlugin)
 		r.Get("/jobs", handleListJobs)
@@ -76,11 +84,18 @@ func NewServer(host string, port int, sched JobTriggerer) *Server {
 }
 
 // Start begins listening in a goroutine. Call Shutdown to stop.
+// Fatal start-up errors (e.g. port in use) are sent to Err().
 func (s *Server) Start() {
 	go func() {
 		slog.Info("API server starting", "addr", s.httpServer.Addr)
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("API server error", "error", err)
+			if s.errCh != nil {
+				select {
+				case s.errCh <- err:
+				default:
+				}
+			}
 		}
 	}()
 }

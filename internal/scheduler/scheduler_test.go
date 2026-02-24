@@ -102,3 +102,21 @@ func TestListJobs(t *testing.T) {
 		t.Fatalf("got %d jobs, want 2", len(jobs))
 	}
 }
+
+func TestJobExists(t *testing.T) {
+	s := New()
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "exists.job"},
+	})
+
+	if !s.JobExists("exists.job") {
+		t.Fatal("expected JobExists to return true for registered job")
+	}
+	if s.JobExists("missing.job") {
+		t.Fatal("expected JobExists to return false for unregistered job")
+	}
+	if s.JobExists("") {
+		t.Fatal("expected JobExists to return false for empty ID")
+	}
+}

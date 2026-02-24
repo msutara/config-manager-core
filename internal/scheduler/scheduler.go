@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -69,6 +70,14 @@ func (s *Scheduler) TriggerJob(id string) error {
 	return j.Func()
 }
 
+// JobExists returns true if a job with the given ID is registered.
+func (s *Scheduler) JobExists(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.jobs[id]
+	return ok
+}
+
 // Start begins the cron scheduler. Placeholder for Phase 2.
 func (s *Scheduler) Start() {
 	slog.Info("scheduler started (cron not yet implemented)")
@@ -80,10 +89,4 @@ func (s *Scheduler) Stop() {
 }
 
 // ErrJobNotFound is returned when a job ID is not in the registry.
-var ErrJobNotFound = &jobNotFoundError{}
-
-type jobNotFoundError struct{}
-
-func (e *jobNotFoundError) Error() string {
-	return "job not found"
-}
+var ErrJobNotFound = errors.New("job not found")

@@ -13,12 +13,8 @@ import (
 	"github.com/msutara/config-manager-core/plugin"
 )
 
-var (
-	startTime = time.Now()
-
-	// Version is set by the main package at startup.
-	Version = "0.1.0"
-)
+// Version is set by the main package at startup.
+var Version = "0.1.0"
 
 // ErrorResponse is the standard error envelope.
 type ErrorResponse struct {
@@ -53,7 +49,7 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func handleNode(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "unknown"
@@ -81,7 +77,7 @@ func handleNode(w http.ResponseWriter, _ *http.Request) {
 		"hostname":       hostname,
 		"os":             osRelease,
 		"kernel":         kernel,
-		"uptime_seconds": int(time.Since(startTime).Seconds()),
+		"uptime_seconds": int(time.Since(s.startTime).Seconds()),
 		"arch":           runtime.GOARCH,
 	})
 }
@@ -150,6 +146,17 @@ func (s *Server) handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 
 	if s.scheduler == nil {
 		writeError(w, http.StatusInternalServerError, "scheduler_unavailable", "Scheduler not configured")
+		return
+	}
+
+	if req.JobID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "job_id is required")
+		return
+	}
+
+	if !s.scheduler.JobExists(req.JobID) {
+		writeError(w, http.StatusNotFound, "job_not_found",
+			"Job '"+req.JobID+"' not found")
 		return
 	}
 
