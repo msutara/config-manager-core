@@ -143,3 +143,45 @@ func TestMetadataFrom(t *testing.T) {
 		t.Fatalf("unexpected metadata: %+v", m)
 	}
 }
+
+func TestDisableExcept_FiltersPlugins(t *testing.T) {
+	ResetForTesting()
+	Register(newFake("keep"))
+	Register(newFake("drop"))
+	Register(newFake("also-keep"))
+
+	DisableExcept([]string{"keep", "also-keep"})
+
+	plugins := List()
+	if len(plugins) != 2 {
+		t.Fatalf("got %d plugins, want 2", len(plugins))
+	}
+	for _, p := range plugins {
+		if p.Name() != "keep" && p.Name() != "also-keep" {
+			t.Errorf("unexpected plugin %q after filtering", p.Name())
+		}
+	}
+}
+
+func TestDisableExcept_EmptyAllowlistKeepsAll(t *testing.T) {
+	ResetForTesting()
+	Register(newFake("a"))
+	Register(newFake("b"))
+
+	DisableExcept([]string{})
+
+	if len(List()) != 2 {
+		t.Fatalf("empty allowlist should keep all plugins, got %d", len(List()))
+	}
+}
+
+func TestDisableExcept_NilAllowlistKeepsAll(t *testing.T) {
+	ResetForTesting()
+	Register(newFake("a"))
+
+	DisableExcept(nil)
+
+	if len(List()) != 1 {
+		t.Fatalf("nil allowlist should keep all plugins, got %d", len(List()))
+	}
+}
