@@ -1,6 +1,6 @@
 # Config Manager Core — Architecture
 
-## 1. Directory layout
+## 1. Directory Structure
 
 ```text
 config-manager-core/
@@ -34,37 +34,20 @@ config-manager-core/
 
 ---
 
-## 2. Core components
+## 2. Components
 
-### 2.1. Entry point (`cmd/cm/main.go`)
+### Entry point (`cmd/cm/main.go`)
 
 - Parses CLI flags (if any).
 - Loads configuration.
 - Initializes logging.
-- Initializes plugin registry (plugins self-register via `init()`).
+- Initializes plugin registry (core registers plugins explicitly in `main.go`).
 - Initializes scheduler and registers plugin jobs.
 - Starts HTTP API server in a background goroutine.
 - (Phase 2) Starts TUI (Bubble Tea) as the main loop.
 - (Phase 1) Blocks on signal (SIGINT/SIGTERM) until shutdown.
 
-### 2.2. Configuration (`internal/config/config.go`)
-
-- Go struct with YAML tags.
-- Sources (Phase 1):
-  - Config file (YAML, default `/etc/cm/config.yaml`).
-  - (Planned) Environment variables for overrides in a later phase.
-- Key settings (Phase 1 implementation):
-  - `listen_host`, `listen_port`
-  - `enabled_plugins` (optional, all enabled by default)
-  - `log_level`
-- Planned future settings:
-  - `auth_mode`, `auth_token`
-
----
-
-## 3. API layer
-
-### 3.1. Core routes (`internal/api/routes.go`)
+### Core routes (`internal/api/routes.go`)
 
 Implements:
 
@@ -75,18 +58,14 @@ Implements:
 - `GET /api/v1/jobs`
 - `POST /api/v1/jobs/trigger`
 
-### 3.2. Server (`internal/api/server.go`)
+### Server (`internal/api/server.go`)
 
 - Creates a Chi router.
 - Mounts core routes under `/api/v1`.
 - Mounts plugin routes under `/api/v1/plugins/{plugin_name}`.
 - Runs in a goroutine alongside the TUI.
 
----
-
-## 4. Plugin system
-
-### 4.1. Interface (`plugin/plugin.go`)
+### Plugin interface (`plugin/plugin.go`)
 
 Defines the `Plugin` interface:
 
@@ -100,9 +79,9 @@ type Plugin interface {
 }
 ```
 
-### 4.2. Registry (`plugin/registry.go`)
+### Plugin registry (`plugin/registry.go`)
 
-- Global registry populated by plugin `init()` functions.
+- Global registry populated by explicit `plugin.Register()` calls in `main.go`.
 - Provides:
   - `Register(p Plugin)`
   - `List() []Plugin`
@@ -110,11 +89,7 @@ type Plugin interface {
   - `AllRoutes() map[string]http.Handler`
   - `AllJobs() []JobDefinition`
 
----
-
-## 5. Scheduler
-
-### 5.1. Scheduler (`internal/scheduler/scheduler.go`)
+### Scheduler (`internal/scheduler/scheduler.go`)
 
 - Simple cron-based scheduler (internal implementation or third-party).
 - Registers jobs from plugins.
@@ -123,11 +98,7 @@ type Plugin interface {
   - `TriggerJob(id string) error`
 - Job IDs are globally unique: `{plugin_name}.{job_name}`.
 
----
-
-## 6. Logging
-
-### 6.1. Logging setup (`internal/logging/logging.go`)
+### Logging (`internal/logging/logging.go`)
 
 - Structured logging via `log/slog` (Go 1.21+ standard library).
 - Output to:
@@ -135,9 +106,20 @@ type Plugin interface {
   - Optional file.
 - Provides a standard logger for plugins: `slog.With("plugin", name)`.
 
+### Error handling
+
+- **Plugin registration:**
+  - Log error, skip faulty plugin.
+- **API errors:**
+  - Return structured JSON error responses (see API.md).
+- **Scheduler errors:**
+  - Log job failures with plugin and job ID.
+- **TUI errors:**
+  - Display error in TUI, allow retry or back navigation.
+
 ---
 
-## 7. Startup sequence
+## 3. Startup Sequence
 
 1. Parse CLI flags.
 2. Load configuration from YAML file.
@@ -148,18 +130,24 @@ type Plugin interface {
    - Mount core routes.
    - Mount plugin routes.
 7. Start HTTP server in a goroutine.
-8. Start TUI as the main blocking loop.
-9. On TUI exit, gracefully shut down HTTP server and scheduler.
+8. (Phase 2) Start TUI as the main blocking loop.
+9. On TUI exit (or SIGINT/SIGTERM in Phase 1), gracefully shut down HTTP server
+   and scheduler.
 
 ---
 
-## 8. Error handling
+## 4. Configuration
 
-- **Plugin registration:**
-  - Log error, skip faulty plugin.
-- **API errors:**
-  - Return structured JSON error responses (see API.md).
-- **Scheduler errors:**
-  - Log job failures with plugin and job ID.
-- **TUI errors:**
-  - Display error in TUI, allow retry or back navigation.
+Configuration is handled in `internal/config/config.go`:
+
+- Go struct with YAML tags.
+- Sources (Phase 1):
+  - Config file (YAML, default `/etc/cm/config.yaml`).
+  - Environment variables (`CM_LISTEN_HOST`, `CM_LISTEN_PORT`, `CM_LOG_LEVEL`,
+    `CM_ENABLED_PLUGINS`) override YAML values.
+- Key settings (Phase 1 implementation):
+  - `listen_host`, `listen_port`
+  - `enabled_plugins` (optional, all enabled by default)
+  - `log_level`
+- Planned future settings:
+  - `auth_mode`, `auth_token`

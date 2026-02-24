@@ -1,6 +1,6 @@
 # How It Works
 
-## Architecture
+## 1. System Design
 
 Config Manager Core is a single Go binary that embeds:
 
@@ -31,15 +31,15 @@ Config Manager Core is a single Go binary that embeds:
 └─────────────────────────────────────┘
 ```
 
-## Plugin Model
+## 2. Plugin Model
 
 Plugins are separate Go modules compiled into the core binary at build time:
 
 1. Each plugin implements the `Plugin` interface (see [PLUGIN-INTERFACE.md](../specs/PLUGIN-INTERFACE.md)).
-2. Plugins self-register via Go `init()` functions.
-3. Adding a plugin = one `import` line in `cmd/cm/main.go` + rebuild.
+2. Plugins export constructors and are registered explicitly in `cmd/cm/main.go`.
+3. Adding a plugin = one import + `plugin.Register()` call in `cmd/cm/main.go` + rebuild.
 
-## Startup Sequence
+## 3. Startup Sequence
 
 1. Parse CLI flags.
 2. Load config from YAML (default: `/etc/cm/config.yaml`).
@@ -51,7 +51,7 @@ Plugins are separate Go modules compiled into the core binary at build time:
 8. Block until SIGINT/SIGTERM (Phase 1) or TUI exit (Phase 2).
 9. On exit: gracefully shut down API server and scheduler.
 
-## Configuration
+## 4. Configuration
 
 YAML-based configuration loaded from a YAML file.
 See [USAGE.md](USAGE.md) for details.

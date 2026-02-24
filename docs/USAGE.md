@@ -1,6 +1,6 @@
 # Usage Guide
 
-## CLI Options
+## 1. CLI Options
 
 ```text
 Usage: cm [OPTIONS]
@@ -11,7 +11,7 @@ Options:
   -help, --help   Show help message
 ```
 
-## Configuration
+## 2. Configuration
 
 CM Core reads configuration from a YAML file. If not found, defaults are used.
 
@@ -46,7 +46,7 @@ CM_ENABLED_PLUGINS=update ./cm
 Invalid `CM_LISTEN_PORT` values are ignored with a warning; the YAML or
 default value is kept.
 
-## Building
+## 3. Building
 
 ```bash
 # Native build
@@ -59,7 +59,7 @@ GOOS=linux GOARCH=arm64 go build -o cm ./cmd/cm
 GOOS=linux GOARCH=arm GOARM=7 go build -o cm ./cmd/cm
 ```
 
-## Running
+## 4. Running
 
 ```bash
 # Run with defaults
@@ -72,7 +72,7 @@ GOOS=linux GOARCH=arm GOARM=7 go build -o cm ./cmd/cm
 ./cm --version
 ```
 
-## Deployment
+## 5. Deployment
 
 Copy the binary to your node and run as a systemd service:
 

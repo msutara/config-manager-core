@@ -55,7 +55,7 @@ Those concerns are handled by plugins and external tools.
 
 ---
 
-## 4. High-level architecture
+## 4. Architecture
 
 - **Core binary:**
   - Go 1.22+
@@ -65,7 +65,7 @@ Those concerns are handled by plugins and external tools.
 - **Plugin system:**
   - Plugins are separate Go modules (separate repos).
   - Each plugin implements the `plugin.Plugin` interface.
-  - Plugins are imported at build time and register via `init()`.
+  - Plugins are imported at build time and registered explicitly in `main.go`.
   - Core mounts plugin routes under `/api/v1/plugins/{name}`.
 
 - **Scheduler:**
@@ -76,7 +76,7 @@ Those concerns are handled by plugins and external tools.
 
 ---
 
-## 5. Plugin model overview
+## 5. Plugin Model
 
 - Plugins are separate Go modules (often separate repos).
 - Each plugin:
@@ -89,7 +89,7 @@ Those concerns are handled by plugins and external tools.
 
 ---
 
-## 6. Frontend interaction model
+## 6. Frontend
 
 - **TUI frontend:**
   - Built with Bubble Tea (Charmbracelet).
@@ -104,17 +104,7 @@ Those concerns are handled by plugins and external tools.
 
 ---
 
-## 7. Security model
-
-- Default: listen on `localhost` only, no auth.
-- Configurable:
-  - Bind address and port.
-  - Simple auth (e.g., shared token or password) — future.
-  - HTTPS termination via reverse proxy — future.
-
----
-
-## 8. Deployment model
+## 7. Deployment
 
 - Built via `go build ./cmd/cm` → single binary `cm`.
 - Cross-compile: `GOOS=linux GOARCH=arm64 go build ./cmd/cm` for Raspbian.
@@ -124,12 +114,3 @@ Those concerns are handled by plugins and external tools.
 - Runs as a systemd service: `cm.service`.
 - Config file: `/etc/cm/config.yaml` (default path, configurable).
 - Logs: systemd journal and optional file logging.
-
----
-
-## 9. Future extensions
-
-- Web frontend (separate repo or embedded).
-- Multi-node awareness (optional).
-- Plugin marketplace/registry.
-- Advanced auth (mTLS, OAuth via reverse proxy).
