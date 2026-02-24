@@ -49,15 +49,24 @@ func Get(name string) (Plugin, bool) {
 // List returns all registered plugins in deterministic (name-sorted) order.
 func List() []Plugin {
 	mu.RLock()
-	defer mu.RUnlock()
-
-	plugins := make([]Plugin, 0, len(registry))
-	for _, p := range registry {
-		plugins = append(plugins, p)
+	type entry struct {
+		name   string
+		plugin Plugin
 	}
-	sort.Slice(plugins, func(i, j int) bool {
-		return plugins[i].Name() < plugins[j].Name()
+	entries := make([]entry, 0, len(registry))
+	for name, p := range registry {
+		entries = append(entries, entry{name, p})
+	}
+	mu.RUnlock()
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].name < entries[j].name
 	})
+
+	plugins := make([]Plugin, len(entries))
+	for i, e := range entries {
+		plugins[i] = e.plugin
+	}
 	return plugins
 }
 

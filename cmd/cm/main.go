@@ -84,7 +84,7 @@ func main() {
 	select {
 	case <-sigCh:
 		slog.Info("received shutdown signal")
-	case err := <-srv.ErrCh:
+	case err := <-srv.Err():
 		slog.Error("API server failed to start", "error", err)
 		os.Exit(1)
 	}
