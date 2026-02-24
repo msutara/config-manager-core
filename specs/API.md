@@ -1,12 +1,18 @@
 # Config Manager Core — API Specification
 
-Base path: `/api/v1`
+## 1. Overview
 
 All responses are JSON. Errors use a common error format.
 
 ---
 
-## 1. Error format
+## 2. Base URL
+
+Base path: `/api/v1`
+
+---
+
+## 3. Error Format
 
 On error, endpoints return:
 
@@ -22,9 +28,9 @@ On error, endpoints return:
 
 ---
 
-## 2. Core endpoints
+## 4. Core Endpoints
 
-### 2.1. `GET /api/v1/health`
+### 4.1. `GET /api/v1/health`
 
 Health check for the core service.
 
@@ -39,7 +45,7 @@ Health check for the core service.
 
 ---
 
-### 2.2. `GET /api/v1/node`
+### 4.2. `GET /api/v1/node`
 
 Basic node/system information.
 
@@ -57,7 +63,7 @@ Basic node/system information.
 
 ---
 
-### 2.3. `GET /api/v1/plugins`
+### 4.3. `GET /api/v1/plugins`
 
 List loaded plugins.
 
@@ -80,7 +86,7 @@ List loaded plugins.
 
 ---
 
-### 2.4. `GET /api/v1/plugins/{name}`
+### 4.4. `GET /api/v1/plugins/{name}`
 
 Get metadata for a specific plugin.
 
@@ -112,7 +118,7 @@ Get metadata for a specific plugin.
 
 ---
 
-### 2.5. `GET /api/v1/jobs`
+### 4.5. `GET /api/v1/jobs`
 
 List scheduled jobs from all plugins.
 
@@ -121,14 +127,14 @@ List scheduled jobs from all plugins.
 ```json
 [
   {
-    "id": "update.run_security",
+    "id": "update.security",
     "plugin": "update",
     "description": "Run security updates",
     "schedule": "0 3 * * *",
     "next_run_time": null
   },
   {
-    "id": "update.run_full",
+    "id": "update.full",
     "plugin": "update",
     "description": "Run full upgrade",
     "schedule": null,
@@ -142,7 +148,7 @@ List scheduled jobs from all plugins.
 
 ---
 
-### 2.6. `POST /api/v1/jobs/trigger`
+### 4.6. `POST /api/v1/jobs/trigger`
 
 Trigger a job by ID.
 
@@ -150,7 +156,7 @@ Trigger a job by ID.
 
 ```json
 {
-  "job_id": "update.run_full"
+  "job_id": "update.security"
 }
 ```
 
@@ -159,7 +165,7 @@ Trigger a job by ID.
 ```json
 {
   "status": "accepted",
-  "job_id": "update.run_full"
+  "job_id": "update.security"
 }
 ```
 
@@ -181,7 +187,7 @@ Trigger a job by ID.
 {
   "error": {
     "code": "job_not_found",
-    "message": "Job 'update.run_full' not found",
+    "message": "Job 'update.security' not found",
     "details": {}
   }
 }
@@ -189,9 +195,9 @@ Trigger a job by ID.
 
 ---
 
-## 3. Plugin endpoints
+## 5. Plugin Endpoints
 
-### 3.1. Mounting rules
+### 5.1. Mounting rules
 
 Each plugin is mounted under:
 
@@ -207,20 +213,22 @@ Example (update plugin):
 - `/api/v1/plugins/update/run`
 - `/api/v1/plugins/update/config`
 
-The exact schemas for each plugin live in the plugin's own `specs/API.md`.
+The exact schemas for each plugin live in the plugin's own `specs/SPEC.md`.
 
 ---
 
-## 4. Authentication (future)
+## 6. Authentication (Future)
 
 Initial version runs without auth on localhost only.
 
 Later, optional auth modes:
 
 - Shared token in header:
+
   ```text
   Authorization: Bearer <token>
   ```
+
 - Basic auth for simple setups.
 
 Details will be added as the security model evolves.

@@ -10,7 +10,7 @@ Target platforms: Raspbian Bookworm (ARM64), Debian Bullseye slim.
 
 - **Entry point**: `cmd/cm/main.go` — parses flags, loads config, initializes plugins/scheduler/API, starts TUI
 - **Plugin interface**: `plugin/plugin.go` — defines the `Plugin` interface that all plugins implement
-- **Plugin registry**: `plugin/registry.go` — global registry; plugins self-register via `init()`
+- **Plugin registry**: `plugin/registry.go` — global registry; plugins registered explicitly in `main.go`
 - **Configuration**: `internal/config/config.go` — YAML config with struct tags
 - **API server**: `internal/api/server.go` — Chi router, runs in a goroutine alongside TUI
 - **API routes**: `internal/api/routes.go` — core endpoints: health, node info, plugins, jobs
@@ -20,13 +20,16 @@ Target platforms: Raspbian Bookworm (ARM64), Debian Bullseye slim.
 ## Plugin Model
 
 Plugins are separate Go modules in their own repos:
+
 - `github.com/msutara/cm-plugin-update` — OS/package update management
 - `github.com/msutara/cm-plugin-network` — network configuration
 
 Each plugin:
+
 1. Implements `plugin.Plugin` interface
-2. Calls `plugin.Register()` in an `init()` function
-3. Is imported in `cmd/cm/main.go` with a blank import: `import _ "github.com/msutara/cm-plugin-update"`
+2. Exports a constructor (e.g., `NewUpdatePlugin()`)
+3. Is imported and registered explicitly in `cmd/cm/main.go`:
+   `plugin.Register(update.NewUpdatePlugin())`
 
 ## Conventions
 
@@ -42,6 +45,7 @@ Each plugin:
 ## Specifications
 
 Agent-readable specifications live in `specs/`:
+
 - `specs/SPEC.md` — what the core does and doesn't do
 - `specs/ARCHITECTURE.md` — directory layout, components, startup sequence
 - `specs/PLUGIN-INTERFACE.md` — the Plugin interface contract
@@ -53,5 +57,5 @@ User-facing documentation lives in `docs/`.
 
 - All Go code must pass `golangci-lint run`
 - All tests must pass: `go test ./...`
-- CI runs lint + test via `.github/workflows/ci.yml`
+- CI runs markdownlint + lint + test via `.github/workflows/ci.yml`
 - Never push directly to main — always use feature branches and PRs

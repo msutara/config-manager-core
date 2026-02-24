@@ -7,44 +7,30 @@ networking). They are separate Go modules that:
 
 - Implement a common `Plugin` interface.
 - Are imported at build time into the core binary.
-- Self-register via Go `init()` functions.
+- Export a constructor (e.g., `NewUpdatePlugin()`) for explicit registration.
 - Provide HTTP handlers for API routes.
 - Optionally define scheduled jobs.
 
----
-
-## 2. Build-time registration
-
-In a plugin's Go module, a file (conventionally `register.go` or within
-`plugin.go`) calls the core registry during `init()`:
+In the plugin repo (e.g., `cm-plugin-update/plugin.go`), export a constructor:
 
 ```go
-package update
-
-import (
-    "github.com/msutara/config-manager-core/plugin"
-)
-
-func init() {
-    plugin.Register(&UpdatePlugin{})
+func NewUpdatePlugin() *UpdatePlugin {
+    return &UpdatePlugin{}
 }
 ```
 
-In the core binary's `cmd/cm/main.go`, plugins are imported with a blank
-identifier:
+In the core binary's `cmd/cm/main.go`, import the plugin and register it
+explicitly:
 
 ```go
-import (
-    _ "github.com/msutara/cm-plugin-update"
-    _ "github.com/msutara/cm-plugin-network"
-)
-```
+import update "github.com/msutara/cm-plugin-update"
 
-This triggers each plugin's `init()` function, registering it with the core.
+plugin.Register(update.NewUpdatePlugin())
+```
 
 ---
 
-## 3. Plugin interface
+## 2. Plugin Interface
 
 Defined in `plugin/plugin.go`:
 
@@ -71,7 +57,7 @@ type Plugin interface {
 
 ---
 
-## 4. Job definitions
+## 3. Job Definitions
 
 Plugins can define scheduled jobs via `ScheduledJobs()`:
 
@@ -91,7 +77,7 @@ Example:
 func (p *UpdatePlugin) ScheduledJobs() []JobDefinition {
     return []JobDefinition{
         {
-            ID:          "update.run_security",
+            ID:          "update.security",
             Description: "Run security updates",
             Cron:        "0 3 * * *",
             Func:        p.RunSecurityUpdates,
@@ -108,7 +94,7 @@ The core scheduler will:
 
 ---
 
-## 5. Route mounting
+## 4. Route Mounting
 
 CM Core will:
 
@@ -128,18 +114,7 @@ Example:
 
 ---
 
-## 6. Plugin metadata
-
-The `Name()`, `Version()`, and `Description()` methods provide metadata
-exposed via:
-
-- `GET /api/v1/plugins` — list all plugins.
-- `GET /api/v1/plugins/{name}` — get one plugin's metadata.
-- TUI menu generation — each plugin appears as a menu item.
-
----
-
-## 7. Configuration
+## 5. Configuration
 
 Plugin-specific configuration is managed by the plugin itself.
 Recommended pattern:
@@ -152,29 +127,10 @@ Recommended pattern:
 
 ---
 
-## 8. TUI integration
-
-Plugins may optionally implement a `TUIModel` interface (future) to provide
-custom Bubble Tea views. For Phase 1, the TUI will show plugin metadata
-and provide action triggers based on routes.
-
----
-
-## 9. Versioning
-
-Plugins should:
-
-- Expose a version string via `Version()`.
-- Follow semantic versioning where possible.
-- Be able to report their version via metadata and their own endpoints.
-
----
-
-## 10. Creating a new plugin
+## 6. Creating a Plugin
 
 1. Create a new Go module repo (e.g., `cm-plugin-foo`).
 2. Implement the `Plugin` interface.
-3. Call `plugin.Register()` in an `init()` function.
-4. In `config-manager-core/cmd/cm/main.go`, add:
-   `import _ "github.com/msutara/cm-plugin-foo"`
+3. Export a constructor function (e.g., `NewFooPlugin()`).
+4. Add import and `plugin.Register()` call to `cmd/cm/main.go`.
 5. Run `go mod tidy` and rebuild.
