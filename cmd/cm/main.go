@@ -18,11 +18,10 @@ import (
 	"github.com/msutara/config-manager-core/internal/logging"
 	"github.com/msutara/config-manager-core/internal/scheduler"
 	"github.com/msutara/config-manager-core/plugin"
-	// Import plugins here (build-time registration):
-	// _ "github.com/msutara/cm-plugin-update"
-	// _ "github.com/msutara/cm-plugin-network"
-	// Import TUI:
-	// _ "github.com/msutara/config-manager-tui"
+	// Plugins are registered explicitly below in main().
+	// Uncomment when plugin modules are added to go.mod:
+	// update "github.com/msutara/cm-plugin-update"
+	// network "github.com/msutara/cm-plugin-network"
 )
 
 var version = "0.1.0"
@@ -48,6 +47,11 @@ func main() {
 	logging.Setup(cfg.LogLevel)
 	api.Version = version
 	slog.Info("starting cm", "version", version)
+
+	// Register plugins explicitly.
+	// Uncomment when plugin modules are added to go.mod:
+	// plugin.Register(update.NewUpdatePlugin())
+	// plugin.Register(network.NewNetworkPlugin())
 
 	// Apply enabled_plugins filter from config
 	plugin.DisableExcept(cfg.EnabledPlugins)

@@ -13,9 +13,9 @@ var (
 	registry = make(map[string]Plugin)
 )
 
-// Register adds a plugin to the global registry. It is intended to be called
-// from a plugin's init() function. If a plugin with the same name is already
-// registered, the duplicate is logged and skipped.
+// Register adds a plugin to the global registry. It is called from the core
+// binary's main.go during startup (explicit registration). If a plugin with
+// the same name is already registered, the duplicate is logged and skipped.
 func Register(p Plugin) {
 	if p == nil {
 		slog.Warn("plugin registration skipped: nil plugin")
