@@ -13,10 +13,8 @@ import (
 	"github.com/msutara/config-manager-core/plugin"
 )
 
-var (
-	// Version is set by the main package at startup.
-	Version = "0.1.0"
-)
+// Version is set by the main package at startup.
+var Version = "0.1.0"
 
 // ErrorResponse is the standard error envelope.
 type ErrorResponse struct {
