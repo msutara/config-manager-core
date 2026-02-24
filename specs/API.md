@@ -163,6 +163,18 @@ Trigger a job by ID.
 }
 ```
 
+**Response 400:**
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "job_id is required",
+    "details": {}
+  }
+}
+```
+
 **Response 404:**
 
 ```json

@@ -49,7 +49,10 @@ func main() {
 	api.Version = version
 	slog.Info("starting cm", "version", version)
 
-	// Log registered plugins
+	// Apply enabled_plugins filter from config
+	plugin.DisableExcept(cfg.EnabledPlugins)
+
+	// Log registered plugins (after filtering)
 	plugins := plugin.List()
 	slog.Info("plugins loaded", "count", len(plugins))
 	for _, p := range plugins {
@@ -60,9 +63,6 @@ func main() {
 		)
 	}
 
-	// Apply enabled_plugins filter from config
-	plugin.DisableExcept(cfg.EnabledPlugins)
-
 	// Initialize scheduler
 	sched := scheduler.New()
 	sched.RegisterJobs(plugin.AllJobs())
@@ -72,16 +72,22 @@ func main() {
 	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched)
 	srv.Start()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal or server error
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	// TODO: Start TUI here (Phase 2)
-	// For now, block until signal
+	// For now, block until signal or fatal server error
 	slog.Info("cm is running (TUI not yet implemented, press Ctrl+C to stop)",
 		"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
 	)
-	<-sigCh
+	select {
+	case <-sigCh:
+		slog.Info("received shutdown signal")
+	case err := <-srv.ErrCh:
+		slog.Error("API server failed to start", "error", err)
+		os.Exit(1)
+	}
 
 	// Graceful shutdown
 	slog.Info("shutting down")

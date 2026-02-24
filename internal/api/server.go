@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +17,7 @@ type Server struct {
 	httpServer *http.Server
 	scheduler  JobTriggerer
 	startTime  time.Time
+	ErrCh      chan error
 }
 
 // JobTriggerer is satisfied by the scheduler to trigger jobs by ID.
@@ -48,7 +48,7 @@ func NewServer(host string, port int, sched JobTriggerer) *Server {
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
 
-	s := &Server{scheduler: sched, startTime: time.Now()}
+	s := &Server{scheduler: sched, startTime: time.Now(), ErrCh: make(chan error, 1)}
 
 	// Core routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -79,13 +79,13 @@ func NewServer(host string, port int, sched JobTriggerer) *Server {
 }
 
 // Start begins listening in a goroutine. Call Shutdown to stop.
-// If the server fails to bind (e.g. port in use), the process exits.
+// Fatal start-up errors (e.g. port in use) are sent to ErrCh.
 func (s *Server) Start() {
 	go func() {
 		slog.Info("API server starting", "addr", s.httpServer.Addr)
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("API server error — exiting", "error", err)
-			os.Exit(1)
+			slog.Error("API server error", "error", err)
+			s.ErrCh <- err
 		}
 	}()
 }
