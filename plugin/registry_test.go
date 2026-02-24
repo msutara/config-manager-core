@@ -185,3 +185,15 @@ func TestDisableExcept_NilAllowlistKeepsAll(t *testing.T) {
 		t.Fatalf("nil allowlist should keep all plugins, got %d", len(List()))
 	}
 }
+
+func TestDisableExcept_BlankEntriesKeepsAll(t *testing.T) {
+	ResetForTesting()
+	Register(newFake("a"))
+	Register(newFake("b"))
+
+	DisableExcept([]string{"", "  ", "\t"})
+
+	if len(List()) != 2 {
+		t.Fatalf("blank-only allowlist should keep all plugins, got %d", len(List()))
+	}
+}

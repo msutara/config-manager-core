@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -104,15 +105,18 @@ func ResetForTesting() {
 }
 
 // DisableExcept removes all plugins from the registry whose names are not in
-// the provided allowlist. If allowlist is empty, all plugins remain active.
+// the provided allowlist. If allowlist is empty (or contains only blank
+// entries), all plugins remain active.
 func DisableExcept(allowlist []string) {
-	if len(allowlist) == 0 {
-		return
-	}
-
 	allowed := make(map[string]bool, len(allowlist))
 	for _, n := range allowlist {
-		allowed[n] = true
+		n = strings.TrimSpace(n)
+		if n != "" {
+			allowed[n] = true
+		}
+	}
+	if len(allowed) == 0 {
+		return
 	}
 
 	mu.Lock()
