@@ -50,8 +50,10 @@ func main() {
 	}
 
 	// Initialize logging — redirect to file so TUI display is not corrupted.
-	logFile, err := tea.LogToFile("cm-debug.log", "cm")
-	if err != nil {
+	const logPath = "cm-debug.log"
+	logFile, err := tea.LogToFile(logPath, "cm")
+	logFileOk := err == nil
+	if !logFileOk {
 		fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", err)
 		logging.Setup(cfg.LogLevel, io.Discard)
 	} else {
@@ -121,8 +123,11 @@ func main() {
 	}()
 
 	// Forward SIGINT/SIGTERM to TUI for graceful shutdown.
-	// After the first signal, stop intercepting so a second signal
-	// terminates immediately via the OS default handler.
+	// After the first signal, signal.Stop restores the OS default handler
+	// so a second signal terminates immediately. This is intentional: if
+	// the TUI hangs during shutdown, the user can force-quit without
+	// needing another terminal. The trade-off is that a force-quit may
+	// leave the terminal in raw mode (fixable with `reset`).
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -159,7 +164,11 @@ func main() {
 
 	// Now that the TUI has restored the terminal, report fatal errors.
 	if exitFailed.Load() {
-		fmt.Fprintln(os.Stderr, "fatal: exiting due to startup error (see cm-debug.log)")
+		if logFileOk {
+			fmt.Fprintf(os.Stderr, "fatal: exiting due to startup error (see %s)\n", logPath)
+		} else {
+			fmt.Fprintln(os.Stderr, "fatal: exiting due to startup error (logs unavailable)")
+		}
 	}
 
 	// Graceful shutdown
