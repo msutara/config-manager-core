@@ -84,7 +84,20 @@ GOOS=linux GOARCH=arm64 go build -o cm ./cmd/cm
 
 ## 5. Deployment
 
-### Via .deb package (recommended)
+### Quick install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/msutara/config-manager-core/main/scripts/install.sh | sudo bash
+```
+
+The script auto-detects your architecture, downloads the latest `.deb`, and
+installs it. Override with `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/msutara/config-manager-core/main/scripts/install.sh | sudo bash -s -- --version 0.2.0 --arch armhf
+```
+
+### Via .deb package
 
 ```bash
 # Install
