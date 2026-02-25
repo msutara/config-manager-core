@@ -1,0 +1,35 @@
+[Unit]
+Description=Config Manager — headless node management
+Documentation=https://github.com/msutara/config-manager-core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cm
+Group=cm
+ExecStart=/usr/bin/cm
+WorkingDirectory=/var/lib/cm
+Restart=on-failure
+RestartSec=5
+
+# Environment defaults for systemd.
+# Remove or comment out individual lines to let /etc/cm/config.yaml take effect.
+# Environment=CM_LOG_LEVEL=info
+
+# Logging — use systemd journal; cm also writes to /var/log/cm/cm.log
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cm
+
+# Hardening
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/cm /var/lib/cm
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

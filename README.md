@@ -7,29 +7,61 @@ and job scheduler — all in a single binary.
 ## Features
 
 - **Plugin architecture** — modular, separate repos compiled into one binary
-- **TUI interface** (planned) — interactive menus via Bubble Tea (raspi-config style)
+- **TUI interface** — interactive menus via Bubble Tea (raspi-config style)
 - **REST API** — embedded HTTP server for remote access and future web UI
 - **Job scheduler** — cron-based recurring tasks defined by plugins
 - **Single binary** — cross-compile for ARM, no runtime dependencies
+- **.deb packaging** — install with `dpkg`, systemd service included
+
+## Installation
+
+### From .deb package (recommended)
+
+Download the latest release for your architecture from
+[GitHub Releases](https://github.com/msutara/config-manager-core/releases):
+
+```bash
+# Raspberry Pi 2 / UCK Gen1 (ARMv7)
+sudo dpkg -i cm_<version>_armhf.deb
+
+# Raspberry Pi 4+ (ARM64)
+sudo dpkg -i cm_<version>_arm64.deb
+
+# x86_64
+sudo dpkg -i cm_<version>_amd64.deb
+```
+
+The package installs a systemd service, creates a `cm` user, and sets up
+directories. Start with:
+
+```bash
+sudo systemctl start cm
+```
+
+### From source
+
+```bash
+# Native build
+make build
+
+# Cross-compile all targets (amd64, arm64, armhf)
+make build-all
+
+# Build .deb packages for all architectures
+make deb-all
+```
 
 ## Quick Start
 
 ```bash
-# Build
-go build -o cm ./cmd/cm
-
-# Cross-compile for Raspbian (ARM64)
-GOOS=linux GOARCH=arm64 go build -o cm ./cmd/cm
-
-# Run
-./cm
-./cm --config /path/to/config.yaml
-./cm --version
+./cm                              # run with defaults
+./cm --config /path/to/config.yaml  # custom config
+./cm --version                    # show version
 ```
 
 ## Documentation
 
-- [Usage Guide](docs/USAGE.md) — CLI options and configuration
+- [Usage Guide](docs/USAGE.md) — CLI options, configuration, and deployment
 - [How It Works](docs/HOW-IT-WORKS.md) — architecture and plugin model
 
 ## Specifications

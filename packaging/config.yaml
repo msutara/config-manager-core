@@ -1,0 +1,22 @@
+# Config Manager — configuration file
+# Installed to /etc/cm/config.yaml
+#
+# All values shown are defaults. Uncomment and modify as needed.
+# Environment variables (CM_LISTEN_HOST, CM_LISTEN_PORT, CM_LOG_LEVEL,
+# CM_ENABLED_PLUGINS) override these values when set.
+
+# Bind address for the REST API.
+# "localhost" restricts access to the local machine (SSH tunnel for remote).
+# Set to "0.0.0.0" to listen on all interfaces (consider adding auth first).
+listen_host: "localhost"
+
+# Port for the REST API.
+listen_port: 8080
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# YAML list of plugins to enable (empty list = all enabled).
+# Example: ["update", "network"]
+# The CM_ENABLED_PLUGINS env var uses comma-separated format instead.
+# enabled_plugins: []

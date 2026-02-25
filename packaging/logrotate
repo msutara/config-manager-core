@@ -1,0 +1,11 @@
+/var/log/cm/cm.log {
+    su cm cm
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 cm cm
+    copytruncate
+}

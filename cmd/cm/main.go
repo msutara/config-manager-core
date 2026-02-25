@@ -30,7 +30,8 @@ import (
 	// network "github.com/msutara/cm-plugin-network"
 )
 
-var version = "0.1.0"
+// version is set at build time via -ldflags.
+var version = "dev"
 
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: /etc/cm/config.yaml)")
@@ -50,8 +51,14 @@ func main() {
 	}
 
 	// Initialize logging — redirect to file so TUI display is not corrupted.
-	const logPath = "cm-debug.log"
+	// Prefer /var/log/cm/cm.log (installed via .deb); fall back to ./cm-debug.log
+	// for development or when running without packaging.
+	logPath := "/var/log/cm/cm.log"
 	logFile, err := tea.LogToFile(logPath, "cm")
+	if err != nil {
+		logPath = "cm-debug.log"
+		logFile, err = tea.LogToFile(logPath, "cm")
+	}
 	logFileOk := err == nil
 	if !logFileOk {
 		fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", err)
