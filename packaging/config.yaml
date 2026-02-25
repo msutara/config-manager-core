@@ -16,5 +16,7 @@ listen_port: 8080
 # Log level: debug, info, warn, error
 log_level: "info"
 
-# Comma-separated list of plugins to enable (empty = all enabled).
+# YAML list of plugins to enable (empty list = all enabled).
+# Example: ["update", "network"]
+# The CM_ENABLED_PLUGINS env var uses comma-separated format instead.
 # enabled_plugins: []

@@ -18,15 +18,18 @@ case "$1" in
     configure)
         # Only run systemctl when systemd is the init system.
         if [ -d /run/systemd/system ]; then
-            systemctl daemon-reload
+            systemctl daemon-reload || true
             if [ -z "$2" ]; then
                 # Fresh install: enable and start.
-                systemctl enable cm
-                systemctl start cm
-                echo "Config Manager installed and started."
+                systemctl enable cm || true
+                if systemctl start cm; then
+                    echo "Config Manager installed and started."
+                else
+                    echo "Config Manager installed but failed to start. Check: journalctl -u cm"
+                fi
             else
                 # Upgrade: restart to load new binary.
-                systemctl try-restart cm
+                systemctl try-restart cm || true
             fi
         fi
         ;;

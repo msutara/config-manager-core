@@ -110,7 +110,7 @@ type Plugin interface {
 
 - Structured logging via `log/slog` (Go 1.21+ standard library).
 - Output to log file (not stdout) to avoid corrupting the TUI alternate screen.
-- Log path: `/var/log/cm/cm.log` (installed), falls back to `./cm-debug.log` (dev).
+- Log path: `/var/log/cm/cm.log` (installed), falls back to `./cm-debug.log` (dev); if neither path can be opened, logging is configured to `io.Discard` and log messages are dropped.
 - Provides a standard logger for plugins: `slog.With("plugin", name)`.
 
 ### Installed filesystem layout
