@@ -7,6 +7,7 @@ Usage: cm [OPTIONS]
 
 Options:
   --config PATH   Path to config file (default: /etc/cm/config.yaml)
+  --headless      Run without TUI (API server only, for systemd)
   --version       Show version and exit
   -help, --help   Show help message
 ```

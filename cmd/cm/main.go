@@ -35,6 +35,7 @@ var version = "dev"
 
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: /etc/cm/config.yaml)")
+	headless := flag.Bool("headless", false, "run without TUI (API server only, for systemd)")
 	showVersion := flag.Bool("version", false, "show version and exit")
 	flag.Parse()
 
@@ -50,22 +51,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize logging — redirect to file so TUI display is not corrupted.
-	// Prefer /var/log/cm/cm.log (installed via .deb); fall back to ./cm-debug.log
-	// for development or when running without packaging.
+	// Initialize logging.
+	// In headless mode, log directly to file (no TUI to corrupt).
+	// In TUI mode, use tea.LogToFile to redirect the global log package.
 	logPath := "/var/log/cm/cm.log"
-	logFile, err := tea.LogToFile(logPath, "cm")
-	if err != nil {
-		logPath = "cm-debug.log"
-		logFile, err = tea.LogToFile(logPath, "cm")
-	}
-	logFileOk := err == nil
-	if !logFileOk {
-		fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", err)
-		logging.Setup(cfg.LogLevel, io.Discard)
+	var logFileOk bool
+	if *headless {
+		f, ferr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+		if ferr != nil {
+			logPath = "cm-debug.log"
+			f, ferr = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+		}
+		if ferr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", ferr)
+			logging.Setup(cfg.LogLevel, io.Discard)
+		} else {
+			defer f.Close()
+			logging.Setup(cfg.LogLevel, f)
+			logFileOk = true
+		}
 	} else {
-		defer logFile.Close()
-		logging.Setup(cfg.LogLevel, logFile)
+		logFile, lerr := tea.LogToFile(logPath, "cm")
+		if lerr != nil {
+			logPath = "cm-debug.log"
+			logFile, lerr = tea.LogToFile(logPath, "cm")
+		}
+		if lerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", lerr)
+			logging.Setup(cfg.LogLevel, io.Discard)
+		} else {
+			defer logFile.Close()
+			logging.Setup(cfg.LogLevel, logFile)
+			logFileOk = true
+		}
 	}
 	api.Version = version
 	slog.Info("starting cm", "version", version)
@@ -98,78 +116,100 @@ func main() {
 	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched)
 	srv.Start()
 
-	// Build TUI plugin info from registered plugins
-	var tuiPlugins []tui.PluginInfo
-	for _, p := range plugins {
-		tuiPlugins = append(tuiPlugins, tui.PluginInfo{
-			Name:        p.Name(),
-			Description: p.Description(),
-		})
-	}
-
-	// Start TUI as the main blocking loop
-	slog.Info("starting TUI",
-		"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
-		"plugins", len(tuiPlugins),
-	)
-	model := tui.New(tuiPlugins)
-	prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
-
-	// Track whether a fatal error occurred (API failure or TUI crash).
+	// Track whether a fatal error occurred.
 	var exitFailed atomic.Bool
 
-	// Monitor API server for fatal errors (e.g., port in use, listener failure).
-	// Stderr output is deferred to after prog.Run() returns so it doesn't
-	// corrupt the TUI alternate screen.
-	go func() {
-		if err := <-srv.Err(); err != nil {
-			exitFailed.Store(true) // set before slog to avoid preemption race
-			slog.Error("API server failed", "error", err)
-			prog.Kill()
-		}
-	}()
+	if *headless {
+		// Headless mode: no TUI, block on signal.
+		slog.Info("running in headless mode",
+			"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
+		)
 
-	// Forward SIGINT/SIGTERM to TUI for graceful shutdown.
-	// After the first signal, signal.Stop restores the OS default handler
-	// so a second signal terminates immediately. This is intentional: if
-	// the TUI hangs during shutdown, the user can force-quit without
-	// needing another terminal. The trade-off is that a force-quit may
-	// leave the terminal in raw mode (fixable with `reset`).
-	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		slog.Info("received shutdown signal")
-		signal.Stop(sigCh) // restore OS default before Quit to avoid buffering
-		prog.Quit()
-	}()
 
-	if _, err := prog.Run(); err != nil {
-		// On panic, Run() returns fmt.Errorf("%w: %w", ErrProgramKilled, ErrProgramPanic).
-		// errors.Is(err, ErrProgramKilled) is therefore TRUE for panics.
-		// Check ErrProgramPanic first so the else-if's ErrProgramKilled exclusion
-		// doesn't silently swallow a crash.
-		if errors.Is(err, tea.ErrProgramPanic) {
-			slog.Error("TUI crashed (panic)", "error", err)
-			exitFailed.Store(true)
-		} else if !errors.Is(err, tea.ErrInterrupted) && !errors.Is(err, tea.ErrProgramKilled) {
-			slog.Error("TUI exited with error", "error", err)
-			exitFailed.Store(true)
+		// Block until shutdown signal or API server failure.
+		select {
+		case sig := <-sigCh:
+			slog.Info("received shutdown signal", "signal", sig)
+		case err := <-srv.Err():
+			if err != nil {
+				exitFailed.Store(true)
+				slog.Error("API server failed", "error", err)
+			}
+		}
+
+		// Restore OS default so a second signal during shutdown force-kills.
+		signal.Stop(sigCh)
+
+		// Drain API error that may have raced with the signal.
+		select {
+		case err := <-srv.Err():
+			if err != nil {
+				exitFailed.Store(true)
+				slog.Error("API server failed", "error", err)
+			}
+		default:
+		}
+	} else {
+		// TUI mode: build plugin info and run interactive UI.
+		var tuiPlugins []tui.PluginInfo
+		for _, p := range plugins {
+			tuiPlugins = append(tuiPlugins, tui.PluginInfo{
+				Name:        p.Name(),
+				Description: p.Description(),
+			})
+		}
+
+		slog.Info("starting TUI",
+			"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
+			"plugins", len(tuiPlugins),
+		)
+		model := tui.New(tuiPlugins)
+		prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
+
+		// Monitor API server for fatal errors.
+		go func() {
+			if err := <-srv.Err(); err != nil {
+				exitFailed.Store(true)
+				slog.Error("API server failed", "error", err)
+				prog.Kill()
+			}
+		}()
+
+		// Forward SIGINT/SIGTERM to TUI for graceful shutdown.
+		go func() {
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			<-sigCh
+			slog.Info("received shutdown signal")
+			signal.Stop(sigCh)
+			prog.Quit()
+		}()
+
+		if _, err := prog.Run(); err != nil {
+			if errors.Is(err, tea.ErrProgramPanic) {
+				slog.Error("TUI crashed (panic)", "error", err)
+				exitFailed.Store(true)
+			} else if !errors.Is(err, tea.ErrInterrupted) && !errors.Is(err, tea.ErrProgramKilled) {
+				slog.Error("TUI exited with error", "error", err)
+				exitFailed.Store(true)
+			}
+		}
+
+		// Drain any API error that the monitor goroutine may not have processed.
+		select {
+		case err := <-srv.Err():
+			if err != nil {
+				slog.Error("API server failed", "error", err)
+				exitFailed.Store(true)
+			}
+		default:
 		}
 	}
 
-	// Drain any API error that the monitor goroutine may not have processed
-	// yet (e.g., signal-induced exit raced with API failure).
-	select {
-	case err := <-srv.Err():
-		if err != nil {
-			slog.Error("API server failed", "error", err)
-			exitFailed.Store(true)
-		}
-	default:
-	}
-
-	// Now that the TUI has restored the terminal, report fatal errors.
+	// Report fatal errors to stderr (visible in journald for headless,
+	// on terminal for TUI after alt-screen restore).
 	if exitFailed.Load() {
 		if logFileOk {
 			fmt.Fprintf(os.Stderr, "fatal: exiting due to error (see %s)\n", logPath)
