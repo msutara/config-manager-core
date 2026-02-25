@@ -57,10 +57,10 @@ func main() {
 	logPath := "/var/log/cm/cm.log"
 	var logFileOk bool
 	if *headless {
-		f, ferr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
+		f, ferr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
 		if ferr != nil {
 			logPath = "cm-debug.log"
-			f, ferr = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
+			f, ferr = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
 		}
 		if ferr != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not open log file: %v\n", ferr)
@@ -135,8 +135,9 @@ func main() {
 			if err := <-srv.Err(); err != nil {
 				exitFailed.Store(true)
 				slog.Error("API server failed", "error", err)
-				p, _ := os.FindProcess(os.Getpid())
-				_ = p.Signal(syscall.SIGTERM)
+				if p, perr := os.FindProcess(os.Getpid()); perr == nil {
+					_ = p.Signal(syscall.SIGTERM) //nolint:errcheck // best-effort self-signal
+				}
 			}
 		}()
 
