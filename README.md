@@ -7,7 +7,7 @@ and job scheduler — all in a single binary.
 ## Features
 
 - **Plugin architecture** — modular, separate repos compiled into one binary
-- **TUI interface** (planned) — interactive menus via Bubble Tea (raspi-config style)
+- **TUI interface** — interactive menus via Bubble Tea (raspi-config style)
 - **REST API** — embedded HTTP server for remote access and future web UI
 - **Job scheduler** — cron-based recurring tasks defined by plugins
 - **Single binary** — cross-compile for ARM, no runtime dependencies

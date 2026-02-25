@@ -58,7 +58,7 @@ Those concerns are handled by plugins and external tools.
 ## 4. Architecture
 
 - **Core binary:**
-  - Go 1.22+
+  - Go 1.24
   - Single binary: `cm`
   - Embeds TUI (Bubble Tea), REST API (Chi), scheduler, plugin registry.
 
