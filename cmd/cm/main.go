@@ -125,33 +125,29 @@ func main() {
 			"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
 		)
 
-		// Register signal handler before monitor goroutine to avoid race
-		// where a fast API failure sends SIGTERM before Notify is active.
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-		// Monitor API server for fatal errors.
-		go func() {
-			if err := <-srv.Err(); err != nil {
+		// Block until shutdown signal or API server failure.
+		select {
+		case sig := <-sigCh:
+			slog.Info("received shutdown signal", "signal", sig)
+		case err := <-srv.Err():
+			if err != nil {
 				exitFailed.Store(true)
 				slog.Error("API server failed", "error", err)
-				if p, perr := os.FindProcess(os.Getpid()); perr == nil {
-					_ = p.Signal(syscall.SIGTERM) //nolint:errcheck // best-effort self-signal
-				}
 			}
-		}()
+		}
 
-		// Block until SIGINT or SIGTERM.
-		sig := <-sigCh
-		signal.Stop(sigCh) // restore OS default so second signal force-kills
-		slog.Info("received shutdown signal", "signal", sig)
+		// Restore OS default so a second signal during shutdown force-kills.
+		signal.Stop(sigCh)
 
-		// Drain any API error that the monitor goroutine may not have processed.
+		// Drain API error that may have raced with the signal.
 		select {
 		case err := <-srv.Err():
 			if err != nil {
-				slog.Error("API server failed", "error", err)
 				exitFailed.Store(true)
+				slog.Error("API server failed", "error", err)
 			}
 		default:
 		}
