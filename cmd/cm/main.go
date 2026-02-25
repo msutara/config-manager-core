@@ -111,7 +111,7 @@ func main() {
 	// Track whether a fatal error occurred (API failure or TUI crash).
 	var exitFailed atomic.Bool
 
-	// Monitor API server for fatal startup errors (e.g., port in use).
+	// Monitor API server for fatal errors (e.g., port in use, listener failure).
 	// Stderr output is deferred to after prog.Run() returns so it doesn't
 	// corrupt the TUI alternate screen.
 	go func() {
@@ -165,9 +165,9 @@ func main() {
 	// Now that the TUI has restored the terminal, report fatal errors.
 	if exitFailed.Load() {
 		if logFileOk {
-			fmt.Fprintf(os.Stderr, "fatal: exiting due to startup error (see %s)\n", logPath)
+			fmt.Fprintf(os.Stderr, "fatal: exiting due to error (see %s)\n", logPath)
 		} else {
-			fmt.Fprintln(os.Stderr, "fatal: exiting due to startup error (logs unavailable)")
+			fmt.Fprintln(os.Stderr, "fatal: exiting due to error (logs unavailable)")
 		}
 	}
 

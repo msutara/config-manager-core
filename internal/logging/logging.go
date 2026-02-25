@@ -9,7 +9,8 @@ import (
 
 // Setup initializes structured logging with the given level string.
 // Valid levels: "debug", "info", "warn", "error". Defaults to "info".
-// An optional writer may be supplied; when nil, logs go to os.Stdout.
+// An optional writer may be supplied; when nil or absent, logs go to os.Stdout.
+// Only the first writer is used; additional values are ignored.
 func Setup(level string, writers ...io.Writer) {
 	var logLevel slog.Level
 	switch strings.ToLower(level) {
