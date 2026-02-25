@@ -15,7 +15,19 @@ and job scheduler — all in a single binary.
 
 ## Installation
 
-### From .deb package (recommended)
+### Quick install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/msutara/config-manager-core/main/scripts/install.sh | sudo bash
+```
+
+Or with a specific version/architecture:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/msutara/config-manager-core/main/scripts/install.sh | sudo bash -s -- --version 0.2.0 --arch armhf
+```
+
+### From .deb package
 
 Download the latest release for your architecture from
 [GitHub Releases](https://github.com/msutara/config-manager-core/releases):
