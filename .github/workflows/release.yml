@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   GO_VERSION: "1.24"
@@ -48,6 +48,7 @@ jobs:
 
       - name: Build binary
         run: |
+          mkdir -p build
           VERSION=${GITHUB_REF_NAME#v}
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} GOARM=${{ matrix.goarm }} \
             go build -ldflags "-s -w -X main.version=${VERSION}" \
@@ -75,6 +76,8 @@ jobs:
   create-release:
     needs: build-and-release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4

@@ -13,8 +13,9 @@ WorkingDirectory=/var/lib/cm
 Restart=on-failure
 RestartSec=5
 
-# Environment
-Environment=CM_LOG_LEVEL=info
+# Environment defaults for systemd.
+# Remove or comment out individual lines to let /etc/cm/config.yaml take effect.
+# Environment=CM_LOG_LEVEL=info
 
 # Logging — use systemd journal; cm also writes to /var/log/cm/cm.log
 StandardOutput=journal

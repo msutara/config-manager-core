@@ -88,7 +88,7 @@ GOOS=linux GOARCH=arm64 go build -o cm ./cmd/cm
 
 ```bash
 # Install
-sudo dpkg -i cm_0.1.0_armhf.deb
+sudo dpkg -i cm_<version>_armhf.deb
 
 # Manage service
 sudo systemctl start cm
@@ -100,8 +100,7 @@ journalctl -u cm -f              # systemd journal
 cat /var/log/cm/cm.log            # application log
 
 # Upgrade
-sudo dpkg -i cm_0.2.0_armhf.deb
-sudo systemctl restart cm
+sudo dpkg -i cm_<version>_armhf.deb
 
 # Remove (keeps config in /etc/cm/)
 sudo dpkg -r cm
@@ -123,6 +122,11 @@ sudo dpkg --purge cm
 ### Manual deployment
 
 ```bash
-scp cm user@node:/usr/local/bin/cm
-ssh user@node 'sudo systemctl enable --now cm'
+# Copy binary and service file
+scp cm packaging/cm.service user@node:/tmp/
+
+# On the node: install binary, service, and start
+ssh user@node 'sudo mv /tmp/cm /usr/bin/cm && sudo chmod 755 /usr/bin/cm && \
+  sudo mv /tmp/cm.service /lib/systemd/system/cm.service && \
+  sudo systemctl daemon-reload && sudo systemctl enable --now cm'
 ```

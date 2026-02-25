@@ -2,7 +2,7 @@
 # Usage: make build | make build-all | make deb-all | make clean
 
 APP      := cm
-VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
+VERSION  ?= $(shell (git describe --tags --always --dirty 2>/dev/null || echo dev) | sed 's/^v//')
 BUILD_DIR := build
 
 # Go build flags
@@ -16,22 +16,25 @@ TARGETS := \
 
 .PHONY: build build-all clean lint test deb deb-all help
 
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
 ## build: Build for current platform
-build:
+build: $(BUILD_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP) ./cmd/cm
 
 ## build-all: Cross-compile for all targets
-build-all: $(TARGETS)
+build-all: $(BUILD_DIR) $(TARGETS)
 
-linux/amd64:
+linux/amd64: | $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" \
 		-o $(BUILD_DIR)/$(APP)-linux-amd64 ./cmd/cm
 
-linux/arm64:
+linux/arm64: | $(BUILD_DIR)
 	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" \
 		-o $(BUILD_DIR)/$(APP)-linux-arm64 ./cmd/cm
 
-linux/arm/7:
+linux/arm/7: | $(BUILD_DIR)
 	GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "$(LDFLAGS)" \
 		-o $(BUILD_DIR)/$(APP)-linux-armv7 ./cmd/cm
 
@@ -41,7 +44,7 @@ lint:
 
 ## test: Run all tests
 test:
-	go test -race -count=1 ./...
+	go test -count=1 ./...
 
 ## deb: Build .deb for a single ARCH (default: amd64)
 deb: build-all

@@ -22,13 +22,13 @@ Download the latest release for your architecture from
 
 ```bash
 # Raspberry Pi 2 / UCK Gen1 (ARMv7)
-sudo dpkg -i cm_0.1.0_armhf.deb
+sudo dpkg -i cm_<version>_armhf.deb
 
 # Raspberry Pi 4+ (ARM64)
-sudo dpkg -i cm_0.1.0_arm64.deb
+sudo dpkg -i cm_<version>_arm64.deb
 
 # x86_64
-sudo dpkg -i cm_0.1.0_amd64.deb
+sudo dpkg -i cm_<version>_amd64.deb
 ```
 
 The package installs a systemd service, creates a `cm` user, and sets up
