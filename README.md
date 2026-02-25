@@ -8,6 +8,7 @@ and job scheduler — all in a single binary.
 
 - **Plugin architecture** — modular, separate repos compiled into one binary
 - **TUI interface** — interactive menus via Bubble Tea (raspi-config style)
+- **Headless mode** — `--headless` for systemd/daemon use (API server only)
 - **REST API** — embedded HTTP server for remote access and future web UI
 - **Job scheduler** — cron-based recurring tasks defined by plugins
 - **Single binary** — cross-compile for ARM, no runtime dependencies
@@ -82,6 +83,14 @@ make deb-all
 - [ARCHITECTURE.md](specs/ARCHITECTURE.md) — internal structure
 - [PLUGIN-INTERFACE.md](specs/PLUGIN-INTERFACE.md) — plugin contract
 - [API.md](specs/API.md) — REST API specification
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 ## License
 
