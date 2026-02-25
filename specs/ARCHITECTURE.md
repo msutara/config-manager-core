@@ -44,8 +44,8 @@ config-manager-core/
 - Initializes plugin registry (core registers plugins explicitly in `main.go`).
 - Initializes scheduler and registers plugin jobs.
 - Starts HTTP API server in a background goroutine.
-- (Phase 2) Starts TUI (Bubble Tea) as the main loop.
-- (Phase 1) Blocks on signal (SIGINT/SIGTERM) until shutdown.
+- Starts TUI (Bubble Tea) as the main loop with dynamic plugin menus.
+- On TUI exit, gracefully shuts down HTTP server and scheduler.
 
 ### Core routes (`internal/api/routes.go`)
 
@@ -130,9 +130,8 @@ type Plugin interface {
    - Mount core routes.
    - Mount plugin routes.
 7. Start HTTP server in a goroutine.
-8. (Phase 2) Start TUI as the main blocking loop.
-9. On TUI exit (or SIGINT/SIGTERM in Phase 1), gracefully shut down HTTP server
-   and scheduler.
+8. Start TUI as the main blocking loop (with plugin info from registry).
+9. On TUI exit, gracefully shut down HTTP server and scheduler.
 
 ---
 

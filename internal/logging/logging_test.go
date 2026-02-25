@@ -1,7 +1,9 @@
 package logging
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"testing"
 )
@@ -49,4 +51,28 @@ func TestForPluginIncludesName(t *testing.T) {
 	if l == nil {
 		t.Fatal("ForPlugin returned nil")
 	}
+}
+
+func TestSetupWithWriter(t *testing.T) {
+	var buf bytes.Buffer
+	Setup("info", &buf)
+	slog.Info("hello writer")
+	if buf.Len() == 0 {
+		t.Error("expected log output in buffer, got none")
+	}
+}
+
+func TestSetupWithNilWriter(t *testing.T) {
+	// nil writer should fall back to os.Stdout (no panic).
+	Setup("info", nil)
+	l := slog.Default()
+	if l == nil {
+		t.Fatal("Default logger is nil after Setup with nil writer")
+	}
+}
+
+func TestSetupWithDiscard(t *testing.T) {
+	Setup("info", io.Discard)
+	slog.Info("discarded")
+	// No assertion needed — verifies no panic with io.Discard.
 }

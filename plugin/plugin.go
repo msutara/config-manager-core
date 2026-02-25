@@ -5,7 +5,8 @@ package plugin
 import "net/http"
 
 // Plugin is the interface that all Config Manager plugins must implement.
-// Plugins register themselves via init() by calling Register().
+// Plugins are registered explicitly in the core binary's main.go via
+// plugin.Register().
 type Plugin interface {
 	// Name returns the unique plugin identifier (e.g., "update", "network").
 	Name() string
