@@ -101,7 +101,7 @@ DEB_FILE="$WORK_DIR/cm_${VERSION}_${ARCH}.deb"
 URL="https://github.com/$REPO/releases/download/v${VERSION}/cm_${VERSION}_${ARCH}.deb"
 
 info "Downloading $URL"
-fetch "$DEB_FILE" "$URL"
+fetch "$DEB_FILE" "$URL" || die "Failed to download package from $URL. Check that version $VERSION exists and that your network is working."
 
 # Install.
 info "Installing package..."
