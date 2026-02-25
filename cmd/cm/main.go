@@ -145,6 +145,16 @@ func main() {
 		sig := <-sigCh
 		signal.Stop(sigCh) // restore OS default so second signal force-kills
 		slog.Info("received shutdown signal", "signal", sig)
+
+		// Drain any API error that the monitor goroutine may not have processed.
+		select {
+		case err := <-srv.Err():
+			if err != nil {
+				slog.Error("API server failed", "error", err)
+				exitFailed.Store(true)
+			}
+		default:
+		}
 	} else {
 		// TUI mode: build plugin info and run interactive UI.
 		var tuiPlugins []tui.PluginInfo
