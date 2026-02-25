@@ -104,7 +104,7 @@ func main() {
 		"plugins", len(tuiPlugins),
 	)
 	model := tui.New(tuiPlugins)
-	prog := tea.NewProgram(model, tea.WithAltScreen())
+	prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
 
 	// Track whether a fatal error occurred (API failure or TUI crash).
 	var exitFailed atomic.Bool
@@ -128,8 +128,8 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		slog.Info("received shutdown signal")
+		signal.Stop(sigCh) // restore OS default before Quit to avoid buffering
 		prog.Quit()
-		signal.Stop(sigCh)
 	}()
 
 	if _, err := prog.Run(); err != nil {
