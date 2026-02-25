@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.24"
+  NFPM_VERSION: "2.41.1"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            goarm: ""
+            deb_arch: amd64
+            binary_suffix: amd64
+          - goos: linux
+            goarch: arm64
+            goarm: ""
+            deb_arch: arm64
+            binary_suffix: arm64
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            deb_arch: armhf
+            binary_suffix: armv7
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Configure private module access
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GH_PAT }}@github.com/msutara/".insteadOf "https://github.com/msutara/"
+        env:
+          GOPRIVATE: "github.com/msutara/*"
+
+      - name: Build binary
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} GOARM=${{ matrix.goarm }} \
+            go build -ldflags "-s -w -X main.version=${VERSION}" \
+            -o build/cm-linux-${{ matrix.binary_suffix }} ./cmd/cm
+        env:
+          GOPRIVATE: "github.com/msutara/*"
+
+      - name: Install nfpm
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v${{ env.NFPM_VERSION }}
+
+      - name: Build .deb package
+        run: |
+          VERSION=${GITHUB_REF_NAME#v} \
+          ARCH=${{ matrix.deb_arch }} \
+          NFPM_BINARY_SUFFIX=${{ matrix.binary_suffix }} \
+          nfpm package --packager deb --target build/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.deb_arch }}
+          path: build/*.deb
+
+  create-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a1c98e14c581e82036f4 # v2.2.1
+        with:
+          files: artifacts/*.deb
+          generate_release_notes: true

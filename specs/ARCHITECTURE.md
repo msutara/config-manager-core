@@ -20,12 +20,20 @@ config-manager-core/
       scheduler.go         Job scheduler
     logging/
       logging.go           Structured logging setup
+  packaging/
+    cm.service             systemd service unit
+    config.yaml            Default configuration template
+    postinst.sh            Post-install script (creates user, dirs)
+    prerm.sh               Pre-remove script (stops service)
   specs/                   Agent-readable specifications
   docs/                    User-facing documentation
   .github/
     copilot-instructions.md
     workflows/
-      ci.yml
+      ci.yml               Lint and test on push/PR
+      release.yml          Build .deb packages on version tags
+  Makefile                 Build and packaging targets
+  nfpm.yaml                .deb package configuration
   go.mod
   go.sum
   README.md
@@ -101,10 +109,24 @@ type Plugin interface {
 ### Logging (`internal/logging/logging.go`)
 
 - Structured logging via `log/slog` (Go 1.21+ standard library).
-- Output to:
-  - stdout (for systemd journal).
-  - Optional file.
+- Output to log file (not stdout) to avoid corrupting the TUI alternate screen.
+- Log path: `/var/log/cm/cm.log` (installed), falls back to `./cm-debug.log` (dev).
 - Provides a standard logger for plugins: `slog.With("plugin", name)`.
+
+### Installed filesystem layout
+
+When deployed via `.deb` package:
+
+```text
+/usr/bin/cm                     Binary
+/etc/cm/config.yaml             Configuration (preserved on upgrade)
+/lib/systemd/system/cm.service  systemd service unit
+/var/log/cm/cm.log              Application log
+/var/lib/cm/                    Working directory
+```
+
+The `cm` system user and group are created by the post-install script.
+The service runs with `ProtectSystem=strict` and `NoNewPrivileges=yes`.
 
 ### Error handling
 

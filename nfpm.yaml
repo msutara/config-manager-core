@@ -1,0 +1,61 @@
+# nfpm configuration for Config Manager .deb packages.
+# Usage: VERSION=0.1.0 ARCH=armhf nfpm package --packager deb --target build/
+#
+# Docs: https://nfpm.goreleaser.com/configuration/
+
+name: cm
+arch: "${ARCH}"
+version: "${VERSION}"
+maintainer: "msutara <msutara@users.noreply.github.com>"
+description: "Config Manager for headless Debian-based nodes"
+homepage: "https://github.com/msutara/config-manager-core"
+license: "MIT"
+
+# Minimal dependencies — systemd for service management.
+depends:
+  - systemd
+
+contents:
+  # Binary — mapped per architecture.
+  - src: ./build/cm-linux-${NFPM_BINARY_SUFFIX}
+    dst: /usr/bin/cm
+    file_info:
+      mode: 0755
+
+  # systemd service unit.
+  - src: ./packaging/cm.service
+    dst: /lib/systemd/system/cm.service
+    file_info:
+      mode: 0644
+
+  # Default configuration — marked as config so dpkg preserves user edits.
+  - src: ./packaging/config.yaml
+    dst: /etc/cm/config.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
+  # Logrotate configuration.
+  - src: ./packaging/logrotate
+    dst: /etc/logrotate.d/cm
+    file_info:
+      mode: 0644
+
+  # Create empty directories.
+  - dst: /var/log/cm
+    type: dir
+    file_info:
+      mode: 0750
+      owner: cm
+      group: cm
+
+  - dst: /var/lib/cm
+    type: dir
+    file_info:
+      mode: 0750
+      owner: cm
+      group: cm
+
+scripts:
+  postinstall: ./packaging/postinst.sh
+  preremove: ./packaging/prerm.sh
