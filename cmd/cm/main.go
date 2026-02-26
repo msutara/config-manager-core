@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sync/atomic"
@@ -42,6 +43,11 @@ func main() {
 	if *showVersion {
 		fmt.Println("cm", version)
 		os.Exit(0)
+	}
+
+	if *headless && *connectURL != "" {
+		fmt.Fprintln(os.Stderr, "error: --headless and --connect cannot be used together")
+		os.Exit(2)
 	}
 
 	// Load configuration
@@ -174,8 +180,13 @@ func main() {
 		// Determine connection mode: client (service running) vs standalone.
 		clientMode := false
 		if *connectURL != "" {
-			// Explicit --connect flag: use that URL, force client mode.
-			apiURL = *connectURL
+			// Explicit --connect flag: validate and use that URL, force client mode.
+			u, uerr := url.Parse(*connectURL)
+			if uerr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				fmt.Fprintf(os.Stderr, "error: --connect requires a valid http(s) URL, got %q\n", *connectURL)
+				os.Exit(2)
+			}
+			apiURL = u.Scheme + "://" + u.Host
 			clientMode = true
 			slog.Info("using explicit service URL", "url", apiURL)
 		} else if probeHealth(apiURL) {
