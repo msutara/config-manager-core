@@ -62,10 +62,11 @@ jobs:
 
       - name: Build .deb package
         run: |
-          VERSION=${GITHUB_REF_NAME#v} \
-          ARCH=${{ matrix.deb_arch }} \
-          NFPM_BINARY_SUFFIX=${{ matrix.binary_suffix }} \
+          export VERSION="${GITHUB_REF_NAME#v}"
           nfpm package --packager deb --target build/
+        env:
+          ARCH: ${{ matrix.deb_arch }}
+          NFPM_BINARY_SUFFIX: ${{ matrix.binary_suffix }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
