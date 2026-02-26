@@ -20,7 +20,7 @@ Default path: `/etc/cm/config.yaml`
 
 ```yaml
 listen_host: localhost
-listen_port: 8080
+listen_port: 7788
 log_level: info
 enabled_plugins: []  # empty = all enabled
 ```

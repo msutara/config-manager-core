@@ -11,8 +11,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.ListenHost != "localhost" {
 		t.Fatalf("got host %q, want %q", cfg.ListenHost, "localhost")
 	}
-	if cfg.ListenPort != 8080 {
-		t.Fatalf("got port %d, want %d", cfg.ListenPort, 8080)
+	if cfg.ListenPort != 7788 {
+		t.Fatalf("got port %d, want %d", cfg.ListenPort, 7788)
 	}
 	if cfg.LogLevel != "info" {
 		t.Fatalf("got log_level %q, want %q", cfg.LogLevel, "info")
@@ -41,8 +41,8 @@ func TestLoadMissingFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Should return defaults
-	if cfg.ListenPort != 8080 {
-		t.Fatalf("got port %d, want default 8080", cfg.ListenPort)
+	if cfg.ListenPort != 7788 {
+		t.Fatalf("got port %d, want default 7788", cfg.ListenPort)
 	}
 }
 
@@ -106,8 +106,8 @@ func TestLoadEmptyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.ListenPort != 8080 {
-		t.Fatalf("got port %d, want default 8080", cfg.ListenPort)
+	if cfg.ListenPort != 7788 {
+		t.Fatalf("got port %d, want default 7788", cfg.ListenPort)
 	}
 }
 
@@ -181,8 +181,8 @@ func TestApplyEnv_InvalidPort(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Should keep default when port is invalid
-	if cfg.ListenPort != 8080 {
-		t.Errorf("port: got %d, want default 8080", cfg.ListenPort)
+	if cfg.ListenPort != 7788 {
+		t.Errorf("port: got %d, want default 7788", cfg.ListenPort)
 	}
 }
 
@@ -197,8 +197,8 @@ func TestApplyEnv_OutOfRangePort(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if cfg.ListenPort != 8080 {
-				t.Errorf("port %s: got %d, want default 8080", port, cfg.ListenPort)
+			if cfg.ListenPort != 7788 {
+				t.Errorf("port %s: got %d, want default 7788", port, cfg.ListenPort)
 			}
 		})
 	}

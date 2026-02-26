@@ -99,7 +99,7 @@ Those concerns are handled by plugins and external tools.
 
 - **REST API:**
   - Runs embedded (separate goroutine) alongside the TUI.
-  - Listens on configurable port (default: `localhost:8080`).
+  - Listens on configurable port (default: `localhost:7788`).
   - Same plugin routes available to future web UI.
 
 ---
