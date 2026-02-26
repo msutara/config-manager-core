@@ -16,8 +16,8 @@ depends:
   - systemd
 
 contents:
-  # Binary — mapped per architecture.
-  - src: ./build/cm-linux-${NFPM_BINARY_SUFFIX}
+  # Binary — copied to build/cm by CI before packaging.
+  - src: ./build/cm
     dst: /usr/bin/cm
     file_info:
       mode: 0755

@@ -63,6 +63,7 @@ jobs:
       - name: Build .deb package
         run: |
           export VERSION="${GITHUB_REF_NAME#v}"
+          cp "build/cm-linux-$NFPM_BINARY_SUFFIX" build/cm
           nfpm package --packager deb --target build/
         env:
           ARCH: ${{ matrix.deb_arch }}
