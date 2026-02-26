@@ -23,10 +23,9 @@ import (
 	"github.com/msutara/config-manager-core/plugin"
 
 	tea "github.com/charmbracelet/bubbletea"
-	tui "github.com/msutara/config-manager-tui"
-
-	update "github.com/msutara/cm-plugin-update"
 	network "github.com/msutara/cm-plugin-network"
+	update "github.com/msutara/cm-plugin-update"
+	tui "github.com/msutara/config-manager-tui"
 )
 
 // version is set at build time via -ldflags.
