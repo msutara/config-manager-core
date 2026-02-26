@@ -23,11 +23,9 @@ import (
 	"github.com/msutara/config-manager-core/plugin"
 
 	tea "github.com/charmbracelet/bubbletea"
+	network "github.com/msutara/cm-plugin-network"
+	update "github.com/msutara/cm-plugin-update"
 	tui "github.com/msutara/config-manager-tui"
-	// Plugins are registered explicitly below in main().
-	// Uncomment when plugin modules are added to go.mod:
-	// update "github.com/msutara/cm-plugin-update"
-	// network "github.com/msutara/cm-plugin-network"
 )
 
 // version is set at build time via -ldflags.
@@ -89,9 +87,8 @@ func main() {
 	slog.Info("starting cm", "version", version)
 
 	// Register plugins explicitly.
-	// Uncomment when plugin modules are added to go.mod:
-	// plugin.Register(update.NewUpdatePlugin())
-	// plugin.Register(network.NewNetworkPlugin())
+	plugin.Register(update.NewUpdatePlugin())
+	plugin.Register(network.NewNetworkPlugin())
 
 	// Apply enabled_plugins filter from config
 	plugin.DisableExcept(cfg.EnabledPlugins)
