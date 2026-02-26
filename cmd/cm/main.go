@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sync/atomic"
@@ -34,12 +36,18 @@ var version = "dev"
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: /etc/cm/config.yaml)")
 	headless := flag.Bool("headless", false, "run without TUI (API server only, for systemd)")
+	connectURL := flag.String("connect", "", "connect TUI to running CM service at URL (skip local server)")
 	showVersion := flag.Bool("version", false, "show version and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println("cm", version)
 		os.Exit(0)
+	}
+
+	if *headless && *connectURL != "" {
+		fmt.Fprintln(os.Stderr, "error: --headless and --connect cannot be used together")
+		os.Exit(2)
 	}
 
 	// Load configuration
@@ -107,17 +115,21 @@ func main() {
 	// Initialize scheduler
 	sched := scheduler.New()
 	sched.RegisterJobs(plugin.AllJobs())
-	sched.Start()
 
-	// Start API server
+	// Create API server (not started yet — TUI mode probes first).
 	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched)
-	srv.Start()
 
 	// Track whether a fatal error occurred.
 	var exitFailed atomic.Bool
 
+	// Track whether server/scheduler were started (not started in client mode).
+	serverStarted := false
+
 	if *headless {
-		// Headless mode: no TUI, block on signal.
+		// Headless mode: start server, no TUI, block on signal.
+		sched.Start()
+		srv.Start()
+		serverStarted = true
 		slog.Info("running in headless mode",
 			"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
 		)
@@ -164,21 +176,56 @@ func main() {
 			tuiHost = "localhost"
 		}
 		apiURL := fmt.Sprintf("http://%s:%d", tuiHost, cfg.ListenPort)
+
+		// Determine connection mode: client (service running) vs standalone.
+		clientMode := false
+		if *connectURL != "" {
+			// Explicit --connect flag: validate and use that URL, force client mode.
+			u, uerr := url.Parse(*connectURL)
+			if uerr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				fmt.Fprintf(os.Stderr, "error: --connect requires a valid http(s) URL, got %q\n", *connectURL)
+				os.Exit(2)
+			}
+			apiURL = u.Scheme + "://" + u.Host
+			clientMode = true
+			slog.Info("using explicit service URL", "url", apiURL)
+		} else if probeHealth(apiURL) {
+			// Auto-detect: service already running at configured port.
+			clientMode = true
+			slog.Info("detected running service, connecting as client", "url", apiURL)
+		}
+
+		if !clientMode {
+			// Standalone mode: start our own server and scheduler.
+			sched.Start()
+			srv.Start()
+			serverStarted = true
+		}
+
+		connMode := tui.ModeStandalone
+		if clientMode {
+			connMode = tui.ModeConnected
+		}
+
 		slog.Info("starting TUI",
 			"api", apiURL,
 			"plugins", len(tuiPlugins),
+			"mode", connMode,
 		)
 		model := tui.NewWithAPI(tuiPlugins, apiURL)
+		model.SetConnectionMode(connMode)
 		prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
 
-		// Monitor API server for fatal errors.
-		go func() {
-			if err := <-srv.Err(); err != nil {
-				exitFailed.Store(true)
-				slog.Error("API server failed", "error", err)
-				prog.Kill()
-			}
-		}()
+		if !clientMode {
+			// Monitor API server for fatal errors (standalone only).
+			go func() {
+				if err := <-srv.Err(); err != nil {
+					exitFailed.Store(true)
+					slog.Error("API server failed", "error", err)
+					prog.Kill()
+				}
+			}()
+		}
 
 		// Forward SIGINT/SIGTERM to TUI for graceful shutdown.
 		go func() {
@@ -200,14 +247,16 @@ func main() {
 			}
 		}
 
-		// Drain any API error that the monitor goroutine may not have processed.
-		select {
-		case err := <-srv.Err():
-			if err != nil {
-				slog.Error("API server failed", "error", err)
-				exitFailed.Store(true)
+		if !clientMode {
+			// Drain any API error that the monitor goroutine may not have processed.
+			select {
+			case err := <-srv.Err():
+				if err != nil {
+					slog.Error("API server failed", "error", err)
+					exitFailed.Store(true)
+				}
+			default:
 			}
-		default:
 		}
 	}
 
@@ -221,17 +270,32 @@ func main() {
 		}
 	}
 
-	// Graceful shutdown
+	// Graceful shutdown (only if server/scheduler were started).
 	slog.Info("shutting down")
-	sched.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("shutdown error", "error", err)
+	if serverStarted {
+		sched.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			slog.Error("shutdown error", "error", err)
+		}
 	}
 	slog.Info("goodbye")
 
 	if exitFailed.Load() {
 		os.Exit(1)
 	}
+}
+
+// probeHealth checks whether a CM service is already running at the given URL.
+// Returns true if the health endpoint responds 200 within 1 second.
+func probeHealth(baseURL string) bool {
+	client := &http.Client{Timeout: 1 * time.Second}
+	resp, err := client.Get(baseURL + "/api/v1/health")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // best-effort drain for connection reuse
+	return resp.StatusCode == http.StatusOK
 }
