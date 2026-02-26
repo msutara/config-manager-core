@@ -48,14 +48,16 @@ test:
 
 ## deb: Build .deb for a single ARCH (default: amd64)
 deb: build-all
-	ARCH=$${ARCH:-amd64} NFPM_BINARY_SUFFIX=$$(case $${ARCH:-amd64} in armhf) echo armv7;; arm64) echo arm64;; *) echo amd64;; esac) \
-		VERSION=$(VERSION) nfpm package --packager deb --target $(BUILD_DIR)/
+	$(eval _ARCH := $(or $(ARCH),amd64))
+	$(eval _SUFFIX := $(if $(filter armhf,$(_ARCH)),armv7,$(if $(filter arm64,$(_ARCH)),arm64,amd64)))
+	cp $(BUILD_DIR)/$(APP)-linux-$(_SUFFIX) $(BUILD_DIR)/$(APP)
+	VERSION=$(VERSION) ARCH=$(_ARCH) nfpm package --packager deb --target $(BUILD_DIR)/
 
 ## deb-all: Build .deb packages for all architectures
 deb-all: build-all
-	VERSION=$(VERSION) ARCH=amd64 NFPM_BINARY_SUFFIX=amd64 nfpm package --packager deb --target $(BUILD_DIR)/
-	VERSION=$(VERSION) ARCH=arm64 NFPM_BINARY_SUFFIX=arm64 nfpm package --packager deb --target $(BUILD_DIR)/
-	VERSION=$(VERSION) ARCH=armhf NFPM_BINARY_SUFFIX=armv7 nfpm package --packager deb --target $(BUILD_DIR)/
+	cp $(BUILD_DIR)/$(APP)-linux-amd64 $(BUILD_DIR)/$(APP) && VERSION=$(VERSION) ARCH=amd64 nfpm package --packager deb --target $(BUILD_DIR)/
+	cp $(BUILD_DIR)/$(APP)-linux-arm64 $(BUILD_DIR)/$(APP) && VERSION=$(VERSION) ARCH=arm64 nfpm package --packager deb --target $(BUILD_DIR)/
+	cp $(BUILD_DIR)/$(APP)-linux-armv7 $(BUILD_DIR)/$(APP) && VERSION=$(VERSION) ARCH=armhf nfpm package --packager deb --target $(BUILD_DIR)/
 
 ## clean: Remove build artifacts
 clean:
