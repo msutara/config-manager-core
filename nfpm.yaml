@@ -9,7 +9,7 @@ version: "${VERSION}"
 maintainer: "msutara <msutara@users.noreply.github.com>"
 description: "Config Manager for headless Debian-based nodes"
 homepage: "https://github.com/msutara/config-manager-core"
-license: "MIT"
+license: "GPL-3.0"
 
 # Minimal dependencies — systemd for service management.
 depends:
