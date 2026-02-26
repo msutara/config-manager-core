@@ -296,6 +296,6 @@ func probeHealth(baseURL string) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // best-effort drain for connection reuse
 	return resp.StatusCode == http.StatusOK
 }
