@@ -6,10 +6,11 @@
 Usage: cm [OPTIONS]
 
 Options:
-  --config PATH   Path to config file (default: /etc/cm/config.yaml)
-  --headless      Run without TUI (API server only, for systemd)
-  --version       Show version and exit
-  -help, --help   Show help message
+  --config PATH      Path to config file (default: /etc/cm/config.yaml)
+  --headless         Run without TUI (API server only, for systemd)
+  --connect URL      Connect TUI to running CM service (skip local server)
+  --version          Show version and exit
+  -help, --help      Show help message
 ```
 
 ## 2. Configuration
@@ -73,15 +74,33 @@ GOOS=linux GOARCH=arm64 go build -o cm ./cmd/cm
 ## 4. Running
 
 ```bash
-# Run with defaults
+# Run with defaults (standalone — starts own API server + TUI)
 ./cm
 
 # Run with custom config
 ./cm --config /path/to/config.yaml
 
+# Run headless (API server only, for systemd service)
+./cm --headless
+
+# Connect TUI to a running headless service
+./cm --connect http://localhost:7788
+
 # Check version
 ./cm --version
 ```
+
+### Service + Standalone Mode
+
+CM auto-detects whether a headless service is already running:
+
+- **Standalone**: No service detected → TUI starts its own embedded API server
+  (default behavior).
+- **Connected**: Service detected at configured port → TUI connects to it, no
+  duplicate server started. The footer shows a green `● connected` badge.
+
+Use `--connect URL` to override auto-detection and force client mode with an
+explicit service URL. Both modes can run side by side without crashing either.
 
 ## 5. Deployment
 

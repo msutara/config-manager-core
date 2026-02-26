@@ -96,6 +96,7 @@ Those concerns are handled by plugins and external tools.
   - Runs as the primary interface when `cm` is executed.
   - Discovers plugins via the internal registry.
   - Renders menus dynamically based on plugin metadata.
+  - Footer shows connection mode badge (`● connected` or `● standalone`).
 
 - **REST API:**
   - Runs embedded (separate goroutine) alongside the TUI.
@@ -104,7 +105,22 @@ Those concerns are handled by plugins and external tools.
 
 ---
 
-## 7. Deployment
+## 7. Operating Modes
+
+- **Standalone** (default): TUI starts its own embedded API server and
+  scheduler. This is the behavior when no service is already running.
+- **Connected**: TUI detects a running headless service (via health probe) and
+  connects to its API. No duplicate server or scheduler is started.
+- **Headless**: `--headless` flag runs the API server only (no TUI), intended
+  for systemd service deployment.
+
+Auto-detection: on startup, the TUI probes `GET /api/v1/health` at the
+configured URL with a 1-second timeout. If it responds 200, client mode is
+used. Override with `--connect URL` to force a specific service endpoint.
+
+---
+
+## 8. Deployment
 
 - Built via `go build ./cmd/cm` → single binary `cm`.
 - Cross-compile: `GOOS=linux GOARCH=arm64 go build ./cmd/cm` for Raspbian.
