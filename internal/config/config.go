@@ -23,7 +23,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		ListenHost: "localhost",
-		ListenPort: 8080,
+		ListenPort: 7788,
 		LogLevel:   "info",
 	}
 }

@@ -11,7 +11,7 @@
 listen_host: "localhost"
 
 # Port for the REST API.
-listen_port: 8080
+listen_port: 7788
 
 # Log level: debug, info, warn, error
 log_level: "info"

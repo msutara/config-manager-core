@@ -158,11 +158,17 @@ func main() {
 			})
 		}
 
+		// Use localhost for the TUI client URL when binding to all interfaces.
+		tuiHost := cfg.ListenHost
+		if tuiHost == "0.0.0.0" || tuiHost == "::" || tuiHost == "" {
+			tuiHost = "localhost"
+		}
+		apiURL := fmt.Sprintf("http://%s:%d", tuiHost, cfg.ListenPort)
 		slog.Info("starting TUI",
-			"api", fmt.Sprintf("http://%s:%d", cfg.ListenHost, cfg.ListenPort),
+			"api", apiURL,
 			"plugins", len(tuiPlugins),
 		)
-		model := tui.New(tuiPlugins)
+		model := tui.NewWithAPI(tuiPlugins, apiURL)
 		prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
 
 		// Monitor API server for fatal errors.
