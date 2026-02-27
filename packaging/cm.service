@@ -6,8 +6,6 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=cm
-Group=cm
 ExecStart=/usr/bin/cm --headless
 WorkingDirectory=/var/lib/cm
 Restart=on-failure
@@ -22,14 +20,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=cm
 
-# Hardening
-ProtectSystem=strict
+# Hardening — relaxed because CM manages system packages and network config.
 ProtectHome=yes
-ReadWritePaths=/var/log/cm /var/lib/cm
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectKernelTunables=yes
 ProtectControlGroups=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target

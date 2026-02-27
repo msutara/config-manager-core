@@ -144,14 +144,12 @@ sudo dpkg --purge cm
 
 ### Full uninstall
 
-To completely remove CM including all data, logs, user, and systemd overrides:
+To completely remove CM including all data, logs, and systemd overrides:
 
 ```bash
 sudo systemctl stop cm.service
 sudo dpkg --purge cm
 sudo rm -rf /etc/cm /var/log/cm /var/lib/cm /etc/systemd/system/cm.service.d
-sudo userdel cm 2>/dev/null
-sudo groupdel cm 2>/dev/null
 sudo systemctl daemon-reload
 ```
 
