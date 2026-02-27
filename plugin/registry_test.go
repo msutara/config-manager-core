@@ -7,32 +7,20 @@ import (
 
 // fakePlugin implements Plugin for testing.
 type fakePlugin struct {
-	name    string
-	version string
-	desc    string
-	routes  http.Handler
-	jobs    []JobDefinition
+	name      string
+	version   string
+	desc      string
+	routes    http.Handler
+	jobs      []JobDefinition
+	endpoints []Endpoint
 }
 
-func (f *fakePlugin) Name() string {
-	return f.name
-}
-
-func (f *fakePlugin) Version() string {
-	return f.version
-}
-
-func (f *fakePlugin) Description() string {
-	return f.desc
-}
-
-func (f *fakePlugin) Routes() http.Handler {
-	return f.routes
-}
-
-func (f *fakePlugin) ScheduledJobs() []JobDefinition {
-	return f.jobs
-}
+func (f *fakePlugin) Name() string                   { return f.name }
+func (f *fakePlugin) Version() string                { return f.version }
+func (f *fakePlugin) Description() string            { return f.desc }
+func (f *fakePlugin) Routes() http.Handler           { return f.routes }
+func (f *fakePlugin) ScheduledJobs() []JobDefinition { return f.jobs }
+func (f *fakePlugin) Endpoints() []Endpoint          { return f.endpoints }
 
 func newFake(name string) *fakePlugin {
 	return &fakePlugin{name: name, version: "1.0.0", desc: name + " plugin"}
@@ -93,6 +81,17 @@ func TestGetNotFound(t *testing.T) {
 	}
 }
 
+func TestRegisterInvalidName(t *testing.T) {
+	ResetForTesting()
+
+	for _, bad := range []string{"Up", "has space", "has/slash", "has?query", "123start"} {
+		Register(&fakePlugin{name: bad, version: "1.0.0"})
+	}
+	if len(List()) != 0 {
+		t.Fatalf("invalid names should be rejected, got %d plugins", len(List()))
+	}
+}
+
 func TestList(t *testing.T) {
 	ResetForTesting()
 
@@ -137,10 +136,34 @@ func TestAllJobs(t *testing.T) {
 }
 
 func TestMetadataFrom(t *testing.T) {
-	p := newFake("meta")
+	p := &fakePlugin{
+		name:    "meta",
+		version: "1.0.0",
+		desc:    "meta plugin",
+		endpoints: []Endpoint{
+			{Method: "GET", Path: "/status", Description: "View status"},
+		},
+	}
 	m := MetadataFrom(p)
 	if m.Name != "meta" || m.Version != "1.0.0" || m.Description != "meta plugin" {
 		t.Fatalf("unexpected metadata: %+v", m)
+	}
+	if m.RoutePrefix != "/api/v1/plugins/meta" {
+		t.Fatalf("route_prefix = %q, want %q", m.RoutePrefix, "/api/v1/plugins/meta")
+	}
+	if len(m.Endpoints) != 1 || m.Endpoints[0].Path != "/status" {
+		t.Fatalf("unexpected endpoints: %+v", m.Endpoints)
+	}
+}
+
+func TestMetadataFrom_NilEndpoints(t *testing.T) {
+	p := newFake("nil-ep")
+	m := MetadataFrom(p)
+	if m.Endpoints == nil {
+		t.Fatal("Endpoints should be empty slice, not nil (for clean JSON)")
+	}
+	if len(m.Endpoints) != 0 {
+		t.Fatalf("expected 0 endpoints, got %d", len(m.Endpoints))
 	}
 }
 

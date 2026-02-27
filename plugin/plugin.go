@@ -4,6 +4,15 @@ package plugin
 
 import "net/http"
 
+// Endpoint describes a single HTTP endpoint exposed by a plugin.
+// Plugins declare their endpoints so UIs can render generic pages
+// for plugins that lack a custom template or TUI handler.
+type Endpoint struct {
+	Method      string `json:"method"`      // "GET" or "POST"
+	Path        string `json:"path"`        // e.g. "/status", "/run"
+	Description string `json:"description"` // human-readable label
+}
+
 // Plugin is the interface that all Config Manager plugins must implement.
 // Plugins are registered explicitly in the core binary's main.go via
 // plugin.Register().
@@ -24,6 +33,11 @@ type Plugin interface {
 	// ScheduledJobs returns job definitions for the scheduler.
 	// Return nil or an empty slice if no scheduled jobs are needed.
 	ScheduledJobs() []JobDefinition
+
+	// Endpoints returns the list of HTTP endpoints this plugin exposes.
+	// UIs use this to build generic pages and menus for plugins that
+	// lack a custom template. Return nil or empty if not applicable.
+	Endpoints() []Endpoint
 }
 
 // JobDefinition describes a scheduled job provided by a plugin.
@@ -37,16 +51,24 @@ type JobDefinition struct {
 
 // Metadata holds plugin metadata returned by API endpoints.
 type Metadata struct {
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Description string `json:"description"`
+	Name        string     `json:"name"`
+	Version     string     `json:"version"`
+	Description string     `json:"description"`
+	RoutePrefix string     `json:"route_prefix"`
+	Endpoints   []Endpoint `json:"endpoints"`
 }
 
 // MetadataFrom extracts Metadata from a Plugin.
 func MetadataFrom(p Plugin) Metadata {
+	eps := p.Endpoints()
+	if eps == nil {
+		eps = []Endpoint{}
+	}
 	return Metadata{
 		Name:        p.Name(),
 		Version:     p.Version(),
 		Description: p.Description(),
+		RoutePrefix: "/api/v1/plugins/" + p.Name(),
+		Endpoints:   eps,
 	}
 }

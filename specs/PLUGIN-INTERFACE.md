@@ -52,6 +52,11 @@ type Plugin interface {
     // ScheduledJobs returns a list of job definitions for the scheduler.
     // Return nil or empty slice if no scheduled jobs.
     ScheduledJobs() []JobDefinition
+
+    // Endpoints returns the HTTP endpoints this plugin exposes.
+    // UIs use this to build generic pages/menus for plugins without
+    // a custom template. Return nil or empty if not applicable.
+    Endpoints() []Endpoint
 }
 ```
 
@@ -94,6 +99,36 @@ The core scheduler will:
 
 ---
 
+## 3a. Endpoint Declarations
+
+Plugins declare their HTTP endpoints via `Endpoints()`:
+
+```go
+type Endpoint struct {
+    Method      string // "GET" or "POST"
+    Path        string // relative to plugin mount, e.g. "/status"
+    Description string // human-readable label for UI display
+}
+```
+
+Example:
+
+```go
+func (p *UpdatePlugin) Endpoints() []Endpoint {
+    return []Endpoint{
+        {Method: "GET", Path: "/status", Description: "Pending updates"},
+        {Method: "GET", Path: "/config", Description: "Update configuration"},
+        {Method: "POST", Path: "/run", Description: "Trigger update"},
+    }
+}
+```
+
+The web UI and TUI use endpoint declarations to build generic plugin pages
+and menus. Plugins with a custom UI template get a richer experience;
+plugins without one get a functional page automatically.
+
+---
+
 ## 4. Route Mounting
 
 CM Core will:
@@ -130,7 +165,9 @@ Recommended pattern:
 ## 6. Creating a Plugin
 
 1. Create a new Go module repo (e.g., `cm-plugin-foo`).
-2. Implement the `Plugin` interface.
+2. Implement the `Plugin` interface (including `Endpoints()`).
 3. Export a constructor function (e.g., `NewFooPlugin()`).
 4. Add import and `plugin.Register()` call to `cmd/cm/main.go`.
 5. Run `go mod tidy` and rebuild.
+6. The web UI sidebar and TUI menu discover the plugin automatically.
+7. Optionally add a custom web template or TUI handler for richer UX.

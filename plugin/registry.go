@@ -3,10 +3,13 @@ package plugin
 import (
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 )
+
+var validName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 var (
 	mu       sync.RWMutex
@@ -28,6 +31,10 @@ func Register(p Plugin) {
 	name := p.Name()
 	if name == "" {
 		slog.Warn("plugin registration skipped: empty name")
+		return
+	}
+	if !validName.MatchString(name) {
+		slog.Warn("plugin registration skipped: invalid name (must match [a-z][a-z0-9-]*)", "plugin", name)
 		return
 	}
 	if _, exists := registry[name]; exists {

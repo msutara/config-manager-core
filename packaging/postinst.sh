@@ -25,6 +25,7 @@ case "$1" in
                 systemctl enable cm || true
                 if systemctl start cm; then
                     echo "Config Manager installed and started."
+                    echo "Web UI: set listen_host to 0.0.0.0 in /etc/cm/config.yaml for remote access"
                 else
                     echo "Config Manager installed but failed to start. Check: journalctl -u cm"
                 fi
