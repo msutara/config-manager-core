@@ -4,6 +4,9 @@ package plugin
 
 import "net/http"
 
+// RouteBase is the common URL prefix under which all plugin routes are mounted.
+const RouteBase = "/api/v1/plugins/"
+
 // Endpoint describes a single HTTP endpoint exposed by a plugin.
 // Plugins declare their endpoints so UIs can render generic pages
 // for plugins that lack a custom template or TUI handler.
@@ -68,7 +71,7 @@ func MetadataFrom(p Plugin) Metadata {
 		Name:        p.Name(),
 		Version:     p.Version(),
 		Description: p.Description(),
-		RoutePrefix: "/api/v1/plugins/" + p.Name(),
+		RoutePrefix: RouteBase + p.Name(),
 		Endpoints:   eps,
 	}
 }

@@ -165,7 +165,7 @@ Recommended pattern:
 ## 6. Creating a Plugin
 
 1. Create a new Go module repo (e.g., `cm-plugin-foo`).
-2. Implement the `Plugin` interface (including `Endpoints()`).
+2. Implement the `Plugin` interface (including `Name()` and `Endpoints()`). The `Name()` method **must** return a stable plugin name matching the regex `[a-z][a-z0-9-]*`; names that do not match this pattern will be rejected by the registry and the plugin will not be registered.
 3. Export a constructor function (e.g., `NewFooPlugin()`).
 4. Add import and `plugin.Register()` call to `cmd/cm/main.go`.
 5. Run `go mod tidy` and rebuild.

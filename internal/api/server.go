@@ -76,7 +76,7 @@ func NewServer(host string, port int, sched JobTriggerer, authToken string, webH
 		// Plugin routes — compute handlers once, outside the registry lock.
 		pluginRoutes := plugin.AllRoutes()
 		for name, handler := range pluginRoutes {
-			r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
+			r.Mount(plugin.RouteBase+name, handler)
 		}
 	})
 
