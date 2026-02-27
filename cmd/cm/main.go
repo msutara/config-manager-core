@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -33,15 +36,62 @@ import (
 // version is set at build time via -ldflags.
 var version = "dev"
 
+const defaultTokenPath = "/etc/cm/auth.token"
+
+// loadToken reads the auth token from the given file. Returns empty string
+// only when the file does not exist (auth disabled). Permission errors and
+// empty/whitespace-only files cause a fatal exit to prevent silently
+// disabling auth.
+func loadToken(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ""
+		}
+		fmt.Fprintf(os.Stderr, "fatal: cannot read auth token %s: %v\n", path, err)
+		os.Exit(1)
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		fmt.Fprintf(os.Stderr, "fatal: auth token file %s is empty\n", path)
+		os.Exit(1)
+	}
+	return token
+}
+
+// generateToken writes a new random 32-byte hex token to the given file.
+func generateToken(path string) error {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Errorf("generate random bytes: %w", err)
+	}
+	token := hex.EncodeToString(b)
+	if err := os.WriteFile(path, []byte(token+"\n"), 0o600); err != nil {
+		return fmt.Errorf("write token file: %w", err)
+	}
+	return nil
+}
+
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: /etc/cm/config.yaml)")
 	headless := flag.Bool("headless", false, "run without TUI (API server only, for systemd)")
 	connectURL := flag.String("connect", "", "connect TUI to running CM service at URL (skip local server)")
+	rotateToken := flag.Bool("rotate-token", false, "generate a new auth token and exit")
 	showVersion := flag.Bool("version", false, "show version and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println("cm", version)
+		os.Exit(0)
+	}
+
+	if *rotateToken {
+		if err := generateToken(defaultTokenPath); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Token written to", defaultTokenPath)
+		fmt.Println("Restart the service to apply: sudo systemctl restart cm")
 		os.Exit(0)
 	}
 
@@ -112,12 +162,20 @@ func main() {
 		)
 	}
 
+	// Load auth token from file (empty = auth disabled).
+	authToken := loadToken(defaultTokenPath)
+	if authToken != "" {
+		slog.Info("bearer auth enabled", "token_file", defaultTokenPath)
+	} else {
+		slog.Info("bearer auth disabled (no token file)")
+	}
+
 	// Initialize scheduler
 	sched := scheduler.New()
 	sched.RegisterJobs(plugin.AllJobs())
 
 	// Create API server (not started yet — TUI mode probes first).
-	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched)
+	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched, authToken)
 
 	// Track whether a fatal error occurred.
 	var exitFailed atomic.Bool
@@ -212,7 +270,7 @@ func main() {
 			"plugins", len(tuiPlugins),
 			"mode", connMode,
 		)
-		model := tui.NewWithAPI(tuiPlugins, apiURL)
+		model := tui.NewWithAuth(tuiPlugins, apiURL, authToken)
 		model.SetConnectionMode(connMode)
 		prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
 

@@ -7,6 +7,16 @@ chmod 750 /var/log/cm /var/lib/cm
 
 case "$1" in
     configure)
+        # Generate auth token on fresh install (never overwrite existing).
+        if [ ! -f /etc/cm/auth.token ]; then
+            if command -v openssl >/dev/null 2>&1; then
+                (umask 077 && openssl rand -hex 32 > /etc/cm/auth.token)
+            else
+                (umask 077 && head -c 32 /dev/urandom | od -A n -t x1 | tr -d ' \n' > /etc/cm/auth.token)
+            fi
+            echo "Auth token generated: /etc/cm/auth.token"
+        fi
+
         # Only run systemctl when systemd is the init system.
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true
