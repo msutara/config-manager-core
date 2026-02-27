@@ -51,7 +51,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHandleNode(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil)
+	srv := NewServer("localhost", 0, nil, "")
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
 	srv.handleNode(w, r)
@@ -95,7 +95,7 @@ func TestHandleListPlugins(t *testing.T) {
 func TestHandleGetPluginNotFound(t *testing.T) {
 	plugin.ResetForTesting()
 
-	srv := NewServer("localhost", 0, nil)
+	srv := NewServer("localhost", 0, nil, "")
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/missing", nil)
 	srv.httpServer.Handler.ServeHTTP(w, r)
@@ -184,7 +184,7 @@ func TestNewServerIntegration(t *testing.T) {
 			return true
 		},
 	}
-	srv := NewServer("localhost", 0, sched)
+	srv := NewServer("localhost", 0, sched, "")
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -196,6 +196,39 @@ func TestNewServerIntegration(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestNewServerAuthIntegration(t *testing.T) {
+	plugin.ResetForTesting()
+	srv := NewServer("localhost", 0, nil, "integ-secret")
+	if srv == nil {
+		t.Fatal("NewServer returned nil")
+	}
+
+	// Health should be accessible without token.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("health without token: got %d, want %d", w.Code, http.StatusOK)
+	}
+
+	// Node without token should be 401.
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("node without token: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+
+	// Node with valid token should be 200.
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
+	r.Header.Set("Authorization", "Bearer integ-secret")
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("node with token: got %d, want %d", w.Code, http.StatusOK)
 	}
 }
 

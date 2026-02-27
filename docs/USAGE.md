@@ -9,6 +9,7 @@ Options:
   --config PATH      Path to config file (default: /etc/cm/config.yaml)
   --headless         Run without TUI (API server only, for systemd)
   --connect URL      Connect TUI to running CM service (skip local server)
+  --rotate-token     Generate a new auth token and exit
   --version          Show version and exit
   -help, --help      Show help message
 ```
@@ -48,7 +49,47 @@ CM_ENABLED_PLUGINS=update ./cm
 Invalid `CM_LISTEN_PORT` values are ignored with a warning; the YAML or
 default value is kept.
 
-## 3. Building
+## 3. Authentication
+
+CM uses Bearer token authentication for API access. A random token is
+generated during package installation at `/etc/cm/auth.token` (mode 0600).
+
+All API endpoints require a valid token **except** `/api/v1/health`, which
+remains public for auto-detection probes.
+
+### How it works
+
+- The service reads the token file on startup. If the file exists but is
+  unreadable or empty, the service refuses to start (fail-closed).
+- The TUI reads the same file and attaches the token to every request
+  automatically — no user interaction needed. Run with `sudo cm` since
+  the token file is root-readable only.
+- External clients must include the header:
+
+```bash
+curl -H "Authorization: Bearer $(cat /etc/cm/auth.token)" \
+     http://localhost:7788/api/v1/node
+```
+
+### Rotating the token
+
+```bash
+# Generate a new token and restart the service
+sudo cm --rotate-token
+sudo systemctl restart cm
+```
+
+### Disabling auth
+
+If no token file exists, authentication is disabled and all endpoints are
+open. Remove the file and restart:
+
+```bash
+sudo rm /etc/cm/auth.token
+sudo systemctl restart cm
+```
+
+## 4. Building
 
 ```bash
 # Native build
@@ -71,7 +112,7 @@ GOOS=linux GOARCH=arm GOARM=7 go build -o cm ./cmd/cm
 GOOS=linux GOARCH=arm64 go build -o cm ./cmd/cm
 ```
 
-## 4. Running
+## 5. Running
 
 ```bash
 # Run with defaults (standalone — starts own API server + TUI)
@@ -102,7 +143,7 @@ CM auto-detects whether a headless service is already running:
 Use `--connect URL` to override auto-detection and force client mode with an
 explicit service URL. Both modes can run side by side without crashing either.
 
-## 5. Deployment
+## 6. Deployment
 
 ### Quick install
 

@@ -48,28 +48,36 @@ func slogLogger(next http.Handler) http.Handler {
 }
 
 // NewServer creates a new API server with core and plugin routes mounted.
-func NewServer(host string, port int, sched JobTriggerer) *Server {
+// When authToken is non-empty, all endpoints except /api/v1/health require
+// a valid Bearer token.
+func NewServer(host string, port int, sched JobTriggerer, authToken string) *Server {
 	r := chi.NewRouter()
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
 
 	s := &Server{scheduler: sched, startTime: time.Now(), errCh: make(chan error, 1)}
 
-	// Core routes
-	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/health", handleHealth)
-		r.Get("/node", s.handleNode)
-		r.Get("/plugins", handleListPlugins)
-		r.Get("/plugins/{name}", handleGetPlugin)
-		r.Get("/jobs", handleListJobs)
-		r.Post("/jobs/trigger", s.handleTriggerJob)
-	})
+	// Health endpoint — public, no auth required (used for auto-detection).
+	r.Get("/api/v1/health", handleHealth)
 
-	// Plugin routes — compute handlers once, outside the registry lock.
-	pluginRoutes := plugin.AllRoutes()
-	for name, handler := range pluginRoutes {
-		r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
-	}
+	// All other routes require Bearer token (when configured).
+	r.Group(func(r chi.Router) {
+		r.Use(BearerAuth(authToken))
+
+		r.Route("/api/v1", func(r chi.Router) {
+			r.Get("/node", s.handleNode)
+			r.Get("/plugins", handleListPlugins)
+			r.Get("/plugins/{name}", handleGetPlugin)
+			r.Get("/jobs", handleListJobs)
+			r.Post("/jobs/trigger", s.handleTriggerJob)
+		})
+
+		// Plugin routes — compute handlers once, outside the registry lock.
+		pluginRoutes := plugin.AllRoutes()
+		for name, handler := range pluginRoutes {
+			r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
+		}
+	})
 
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", host, port),
