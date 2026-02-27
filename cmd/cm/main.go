@@ -31,6 +31,7 @@ import (
 	network "github.com/msutara/cm-plugin-network"
 	update "github.com/msutara/cm-plugin-update"
 	tui "github.com/msutara/config-manager-tui"
+	web "github.com/msutara/config-manager-web"
 )
 
 // version is set at build time via -ldflags.
@@ -174,8 +175,18 @@ func main() {
 	sched := scheduler.New()
 	sched.RegisterJobs(plugin.AllJobs())
 
+	// Build the API base URL for the web UI client (loopback).
+	webHost := cfg.ListenHost
+	if webHost == "0.0.0.0" || webHost == "::" || webHost == "" {
+		webHost = "localhost"
+	}
+	apiBaseURL := fmt.Sprintf("http://%s:%d", webHost, cfg.ListenPort)
+
+	// Create web UI handler (browser-based dashboard).
+	webHandler := web.NewHandler(apiBaseURL, authToken)
+
 	// Create API server (not started yet — TUI mode probes first).
-	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched, authToken)
+	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched, authToken, webHandler)
 
 	// Track whether a fatal error occurred.
 	var exitFailed atomic.Bool
@@ -228,12 +239,8 @@ func main() {
 			})
 		}
 
-		// Use localhost for the TUI client URL when binding to all interfaces.
-		tuiHost := cfg.ListenHost
-		if tuiHost == "0.0.0.0" || tuiHost == "::" || tuiHost == "" {
-			tuiHost = "localhost"
-		}
-		apiURL := fmt.Sprintf("http://%s:%d", tuiHost, cfg.ListenPort)
+		// Use the pre-computed API base URL for TUI client.
+		apiURL := apiBaseURL
 
 		// Determine connection mode: client (service running) vs standalone.
 		clientMode := false

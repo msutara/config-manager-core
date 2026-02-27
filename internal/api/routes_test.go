@@ -51,7 +51,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHandleNode(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil, "")
+	srv := NewServer("localhost", 0, nil, "", nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
 	srv.handleNode(w, r)
@@ -95,7 +95,7 @@ func TestHandleListPlugins(t *testing.T) {
 func TestHandleGetPluginNotFound(t *testing.T) {
 	plugin.ResetForTesting()
 
-	srv := NewServer("localhost", 0, nil, "")
+	srv := NewServer("localhost", 0, nil, "", nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/missing", nil)
 	srv.httpServer.Handler.ServeHTTP(w, r)
@@ -184,7 +184,7 @@ func TestNewServerIntegration(t *testing.T) {
 			return true
 		},
 	}
-	srv := NewServer("localhost", 0, sched, "")
+	srv := NewServer("localhost", 0, sched, "", nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -201,7 +201,7 @@ func TestNewServerIntegration(t *testing.T) {
 
 func TestNewServerAuthIntegration(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil, "integ-secret")
+	srv := NewServer("localhost", 0, nil, "integ-secret", nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
