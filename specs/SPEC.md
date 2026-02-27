@@ -7,7 +7,7 @@ Debian-based, headless nodes. It provides:
 
 - A plugin system for modular functionality (updates, networking, etc.).
 - A TUI interface (raspi-config style) for interactive management.
-- A REST API for future web UI / remote access.
+- A REST API for the web UI dashboard and remote access.
 - A scheduling layer for recurring tasks.
 
 CM Core does not implement domain-specific logic itself; that logic lives in
@@ -49,7 +49,6 @@ CM Core does **not**:
 
 - Implement OS-specific logic (updates, networking, etc.).
 - Handle multi-node orchestration (it is per-node).
-- Provide a web frontend (future scope).
 
 Those concerns are handled by plugins and external tools.
 
@@ -101,7 +100,7 @@ Those concerns are handled by plugins and external tools.
 - **REST API:**
   - Runs embedded (separate goroutine) alongside the TUI.
   - Listens on configurable port (default: `localhost:7788`).
-  - Same plugin routes available to future web UI.
+  - Same plugin routes available to the embedded web UI dashboard.
 
 ---
 

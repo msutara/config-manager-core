@@ -49,8 +49,9 @@ func slogLogger(next http.Handler) http.Handler {
 
 // NewServer creates a new API server with core and plugin routes mounted.
 // When authToken is non-empty, all endpoints except /api/v1/health require
-// a valid Bearer token.
-func NewServer(host string, port int, sched JobTriggerer, authToken string) *Server {
+// a valid Bearer token. If webHandler is non-nil it is mounted at the root
+// for the browser-based dashboard.
+func NewServer(host string, port int, sched JobTriggerer, authToken string, webHandler http.Handler) *Server {
 	r := chi.NewRouter()
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
@@ -78,6 +79,11 @@ func NewServer(host string, port int, sched JobTriggerer, authToken string) *Ser
 			r.Mount(fmt.Sprintf("/api/v1/plugins/%s", name), handler)
 		}
 	})
+
+	// Web UI dashboard — mounted after API routes so /api/v1/* takes priority.
+	if webHandler != nil {
+		r.Mount("/", webHandler)
+	}
 
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", host, port),

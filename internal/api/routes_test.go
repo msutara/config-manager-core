@@ -51,7 +51,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHandleNode(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil, "")
+	srv := NewServer("localhost", 0, nil, "", nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
 	srv.handleNode(w, r)
@@ -95,7 +95,7 @@ func TestHandleListPlugins(t *testing.T) {
 func TestHandleGetPluginNotFound(t *testing.T) {
 	plugin.ResetForTesting()
 
-	srv := NewServer("localhost", 0, nil, "")
+	srv := NewServer("localhost", 0, nil, "", nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/missing", nil)
 	srv.httpServer.Handler.ServeHTTP(w, r)
@@ -184,7 +184,7 @@ func TestNewServerIntegration(t *testing.T) {
 			return true
 		},
 	}
-	srv := NewServer("localhost", 0, sched, "")
+	srv := NewServer("localhost", 0, sched, "", nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -201,7 +201,7 @@ func TestNewServerIntegration(t *testing.T) {
 
 func TestNewServerAuthIntegration(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil, "integ-secret")
+	srv := NewServer("localhost", 0, nil, "integ-secret", nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -260,5 +260,31 @@ func TestHandleTriggerJobEmptyID(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("got status %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWebHandlerMountRouting(t *testing.T) {
+	plugin.ResetForTesting()
+
+	// Stub web handler that returns 299 for any request.
+	stub := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(299)
+	})
+	srv := NewServer("localhost", 0, nil, "", stub)
+
+	// "/" should be routed to the web handler stub.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != 299 {
+		t.Fatalf("GET /: got %d, want 299 (web handler)", w.Code)
+	}
+
+	// "/api/v1/health" should still be served by the API, not the stub.
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/health: got %d, want %d", w.Code, http.StatusOK)
 	}
 }
