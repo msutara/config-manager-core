@@ -262,3 +262,29 @@ func TestHandleTriggerJobEmptyID(t *testing.T) {
 		t.Fatalf("got status %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
+
+func TestWebHandlerMountRouting(t *testing.T) {
+	plugin.ResetForTesting()
+
+	// Stub web handler that returns 299 for any request.
+	stub := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(299)
+	})
+	srv := NewServer("localhost", 0, nil, "", stub)
+
+	// "/" should be routed to the web handler stub.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != 299 {
+		t.Fatalf("GET /: got %d, want 299 (web handler)", w.Code)
+	}
+
+	// "/api/v1/health" should still be served by the API, not the stub.
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/health: got %d, want %d", w.Code, http.StatusOK)
+	}
+}
