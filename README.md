@@ -44,8 +44,7 @@ sudo dpkg -i cm_<version>_arm64.deb
 sudo dpkg -i cm_<version>_amd64.deb
 ```
 
-The package installs a systemd service, creates a `cm` user, and sets up
-directories. Start with:
+The package installs a systemd service and sets up directories. Start with:
 
 ```bash
 sudo systemctl start cm

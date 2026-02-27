@@ -46,15 +46,11 @@ contents:
     type: dir
     file_info:
       mode: 0750
-      owner: cm
-      group: cm
 
   - dst: /var/lib/cm
     type: dir
     file_info:
       mode: 0750
-      owner: cm
-      group: cm
 
 scripts:
   postinstall: ./packaging/postinst.sh
