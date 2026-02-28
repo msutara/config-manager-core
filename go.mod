@@ -8,7 +8,7 @@ require (
 	github.com/msutara/cm-plugin-network v0.0.0-20260228011010-2f23468e6c22
 	github.com/msutara/cm-plugin-update v0.0.0-20260228011010-b46ff863ba3b
 	github.com/msutara/config-manager-tui v0.0.0-20260228161435-5250ec6f17c0
-	github.com/msutara/config-manager-web v0.0.0-20260228161435-3c0c351fb436
+	github.com/msutara/config-manager-web v0.2.1-0.20260228164619-76e1ba9a6315
 	gopkg.in/yaml.v3 v3.0.1
 )
 
