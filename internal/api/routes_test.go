@@ -52,9 +52,9 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestSystemUptime_Fallback(t *testing.T) {
-	// Force fallback by pointing at a non-existent file.
+	// Force fallback by pointing at a guaranteed-nonexistent path.
 	old := procUptimePath
-	procUptimePath = "/tmp/nonexistent-uptime-file"
+	procUptimePath = t.TempDir() + "/nonexistent"
 	defer func() { procUptimePath = old }()
 
 	start := time.Now().Add(-5 * time.Minute)
@@ -66,7 +66,6 @@ func TestSystemUptime_Fallback(t *testing.T) {
 }
 
 func TestSystemUptime_ParsesFile(t *testing.T) {
-	// Write a fake /proc/uptime file.
 	f := t.TempDir() + "/uptime"
 	if err := os.WriteFile(f, []byte("86400.55 12345.67\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -79,6 +78,40 @@ func TestSystemUptime_ParsesFile(t *testing.T) {
 	got := systemUptime(time.Now())
 	if got != 86400 {
 		t.Fatalf("systemUptime = %d, want 86400", got)
+	}
+}
+
+func TestSystemUptime_NaN(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("NaN 0.00\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-3 * time.Minute)
+	got := systemUptime(start)
+	if got < 175 || got > 185 {
+		t.Fatalf("systemUptime NaN fallback = %d, want ~180", got)
+	}
+}
+
+func TestSystemUptime_Negative(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("-100.0 0.00\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-1 * time.Minute)
+	got := systemUptime(start)
+	if got < 55 || got > 65 {
+		t.Fatalf("systemUptime negative fallback = %d, want ~60", got)
 	}
 }
 

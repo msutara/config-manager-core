@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -66,7 +67,7 @@ func systemUptime(startTime time.Time) int {
 		return int(time.Since(startTime).Seconds())
 	}
 	secs, err := strconv.ParseFloat(fields[0], 64)
-	if err != nil {
+	if err != nil || math.IsNaN(secs) || math.IsInf(secs, 0) || secs < 0 {
 		return int(time.Since(startTime).Seconds())
 	}
 	return int(secs)
