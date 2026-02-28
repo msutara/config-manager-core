@@ -34,7 +34,7 @@ func Register(p Plugin) {
 		return
 	}
 	if !validName.MatchString(name) {
-		slog.Warn("plugin registration skipped: invalid name (must match [a-z][a-z0-9-]*)", "plugin", name)
+		slog.Warn("plugin registration skipped: invalid name (must match ^[a-z][a-z0-9-]*$)", "plugin", name)
 		return
 	}
 	if _, exists := registry[name]; exists {
