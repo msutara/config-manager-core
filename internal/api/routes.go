@@ -58,17 +58,19 @@ var procUptimePath = "/proc/uptime"
 // systemUptime reads /proc/uptime and returns the system uptime in seconds.
 // Falls back to service uptime (from startTime) if the file cannot be read.
 func systemUptime(startTime time.Time) int {
+	fallback := int(time.Since(startTime).Seconds())
+
 	data, err := os.ReadFile(procUptimePath)
 	if err != nil {
-		return int(time.Since(startTime).Seconds())
+		return fallback
 	}
 	fields := strings.Fields(string(data))
 	if len(fields) == 0 {
-		return int(time.Since(startTime).Seconds())
+		return fallback
 	}
 	secs, err := strconv.ParseFloat(fields[0], 64)
 	if err != nil || math.IsNaN(secs) || math.IsInf(secs, 0) || secs < 0 {
-		return int(time.Since(startTime).Seconds())
+		return fallback
 	}
 	return int(secs)
 }
