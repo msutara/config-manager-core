@@ -56,7 +56,8 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 var procUptimePath = "/proc/uptime"
 
 // systemUptime reads /proc/uptime and returns the system uptime in seconds.
-// Falls back to service uptime (from startTime) if the file cannot be read.
+// Falls back to service uptime (from startTime) if /proc/uptime cannot be read
+// or parsed, or if it contains an invalid uptime value.
 func systemUptime(startTime time.Time) int {
 	fallback := int(time.Since(startTime).Seconds())
 
