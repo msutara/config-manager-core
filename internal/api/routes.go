@@ -50,10 +50,14 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// procUptimePath is the file read by systemUptime. Tests override this to
+// inject failures or custom content.
+var procUptimePath = "/proc/uptime"
+
 // systemUptime reads /proc/uptime and returns the system uptime in seconds.
 // Falls back to service uptime (from startTime) if the file cannot be read.
 func systemUptime(startTime time.Time) int {
-	data, err := os.ReadFile("/proc/uptime")
+	data, err := os.ReadFile(procUptimePath)
 	if err != nil {
 		return int(time.Since(startTime).Seconds())
 	}

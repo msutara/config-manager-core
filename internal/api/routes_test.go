@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -51,14 +52,68 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestSystemUptime_Fallback(t *testing.T) {
-	// On Windows (and any non-Linux), /proc/uptime doesn't exist.
-	// systemUptime should fall back to service uptime.
+	// Force fallback by pointing at a non-existent file.
+	old := procUptimePath
+	procUptimePath = "/tmp/nonexistent-uptime-file"
+	defer func() { procUptimePath = old }()
+
 	start := time.Now().Add(-5 * time.Minute)
 	got := systemUptime(start)
-	// Should be roughly 300s (5 min) since /proc/uptime won't exist on test host.
-	// On Linux CI it reads /proc/uptime and returns real system uptime.
-	if got <= 0 {
-		t.Fatalf("systemUptime returned %d, want > 0", got)
+	// Fallback should return ~300s (5 min of service uptime).
+	if got < 295 || got > 305 {
+		t.Fatalf("systemUptime fallback = %d, want ~300", got)
+	}
+}
+
+func TestSystemUptime_ParsesFile(t *testing.T) {
+	// Write a fake /proc/uptime file.
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("86400.55 12345.67\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	got := systemUptime(time.Now())
+	if got != 86400 {
+		t.Fatalf("systemUptime = %d, want 86400", got)
+	}
+}
+
+func TestSystemUptime_MalformedFile(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("not-a-number idle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-2 * time.Minute)
+	got := systemUptime(start)
+	// Should fall back to service uptime (~120s).
+	if got < 115 || got > 125 {
+		t.Fatalf("systemUptime malformed fallback = %d, want ~120", got)
+	}
+}
+
+func TestSystemUptime_EmptyFile(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-1 * time.Minute)
+	got := systemUptime(start)
+	if got < 55 || got > 65 {
+		t.Fatalf("systemUptime empty fallback = %d, want ~60", got)
 	}
 }
 
