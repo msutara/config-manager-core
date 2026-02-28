@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/msutara/config-manager-core/plugin"
 )
@@ -46,6 +47,18 @@ func TestHandleHealth(t *testing.T) {
 	}
 	if body["status"] != "ok" {
 		t.Fatalf("got status %q, want %q", body["status"], "ok")
+	}
+}
+
+func TestSystemUptime_Fallback(t *testing.T) {
+	// On Windows (and any non-Linux), /proc/uptime doesn't exist.
+	// systemUptime should fall back to service uptime.
+	start := time.Now().Add(-5 * time.Minute)
+	got := systemUptime(start)
+	// Should be roughly 300s (5 min) since /proc/uptime won't exist on test host.
+	// On Linux CI it reads /proc/uptime and returns real system uptime.
+	if got <= 0 {
+		t.Fatalf("systemUptime returned %d, want > 0", got)
 	}
 }
 

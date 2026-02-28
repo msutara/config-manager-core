@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,24 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// systemUptime reads /proc/uptime and returns the system uptime in seconds.
+// Falls back to service uptime (from startTime) if the file cannot be read.
+func systemUptime(startTime time.Time) int {
+	data, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return int(time.Since(startTime).Seconds())
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return int(time.Since(startTime).Seconds())
+	}
+	secs, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return int(time.Since(startTime).Seconds())
+	}
+	return int(secs)
+}
+
 func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -77,7 +96,7 @@ func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
 		"hostname":       hostname,
 		"os":             osRelease,
 		"kernel":         kernel,
-		"uptime_seconds": int(time.Since(s.startTime).Seconds()),
+		"uptime_seconds": systemUptime(s.startTime),
 		"arch":           runtime.GOARCH,
 	})
 }
