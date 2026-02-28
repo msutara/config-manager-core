@@ -115,6 +115,23 @@ func TestSystemUptime_Negative(t *testing.T) {
 	}
 }
 
+func TestSystemUptime_Inf(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("Inf 0.00\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-1 * time.Minute)
+	got := systemUptime(start)
+	if got < 55 || got > 65 {
+		t.Fatalf("systemUptime Inf fallback = %d, want ~60", got)
+	}
+}
+
 func TestSystemUptime_MalformedFile(t *testing.T) {
 	f := t.TempDir() + "/uptime"
 	if err := os.WriteFile(f, []byte("not-a-number idle\n"), 0o644); err != nil {
