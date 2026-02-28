@@ -74,12 +74,25 @@ List loaded plugins.
   {
     "name": "update",
     "version": "0.1.0",
-    "description": "System updates management"
+    "description": "System updates management",
+    "route_prefix": "/api/v1/plugins/update",
+    "endpoints": [
+      {"method": "GET", "path": "/status", "description": "Pending updates and system info"},
+      {"method": "GET", "path": "/logs", "description": "Last update run output"},
+      {"method": "GET", "path": "/config", "description": "Update plugin configuration"},
+      {"method": "POST", "path": "/run", "description": "Trigger update run"}
+    ]
   },
   {
     "name": "network",
     "version": "0.1.0",
-    "description": "Network configuration"
+    "description": "Network configuration",
+    "route_prefix": "/api/v1/plugins/network",
+    "endpoints": [
+      {"method": "GET", "path": "/interfaces", "description": "Network interface details"},
+      {"method": "GET", "path": "/status", "description": "Connectivity and reachability status"},
+      {"method": "GET", "path": "/dns", "description": "DNS configuration"}
+    ]
   }
 ]
 ```
@@ -100,7 +113,14 @@ Get metadata for a specific plugin.
 {
   "name": "update",
   "version": "0.1.0",
-  "description": "System updates management"
+  "description": "System updates management",
+  "route_prefix": "/api/v1/plugins/update",
+  "endpoints": [
+    {"method": "GET", "path": "/status", "description": "Pending updates and system info"},
+    {"method": "GET", "path": "/logs", "description": "Last update run output"},
+    {"method": "GET", "path": "/config", "description": "Update plugin configuration"},
+    {"method": "POST", "path": "/run", "description": "Trigger update run"}
+  ]
 }
 ```
 
