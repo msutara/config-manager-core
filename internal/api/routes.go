@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +51,31 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// procUptimePath is the file read by systemUptime. Tests override this to
+// inject failures or custom content.
+var procUptimePath = "/proc/uptime"
+
+// systemUptime reads /proc/uptime and returns the system uptime in seconds.
+// Falls back to service uptime (from startTime) if /proc/uptime cannot be read
+// or parsed, or if it contains an invalid uptime value.
+func systemUptime(startTime time.Time) int {
+	fallback := int(time.Since(startTime).Seconds())
+
+	data, err := os.ReadFile(procUptimePath)
+	if err != nil {
+		return fallback
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return fallback
+	}
+	secs, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil || math.IsNaN(secs) || math.IsInf(secs, 0) || secs < 0 {
+		return fallback
+	}
+	return int(secs)
+}
+
 func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -77,7 +104,7 @@ func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
 		"hostname":       hostname,
 		"os":             osRelease,
 		"kernel":         kernel,
-		"uptime_seconds": int(time.Since(s.startTime).Seconds()),
+		"uptime_seconds": systemUptime(s.startTime),
 		"arch":           runtime.GOARCH,
 	})
 }

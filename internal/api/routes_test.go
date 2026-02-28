@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/msutara/config-manager-core/plugin"
 )
@@ -46,6 +48,122 @@ func TestHandleHealth(t *testing.T) {
 	}
 	if body["status"] != "ok" {
 		t.Fatalf("got status %q, want %q", body["status"], "ok")
+	}
+}
+
+func TestSystemUptime_Fallback(t *testing.T) {
+	// Force fallback by pointing at a guaranteed-nonexistent path.
+	old := procUptimePath
+	procUptimePath = t.TempDir() + "/nonexistent"
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-5 * time.Minute)
+	got := systemUptime(start)
+	// Fallback should return ~300s (5 min of service uptime).
+	if got < 295 || got > 305 {
+		t.Fatalf("systemUptime fallback = %d, want ~300", got)
+	}
+}
+
+func TestSystemUptime_ParsesFile(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("86400.55 12345.67\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	got := systemUptime(time.Now())
+	if got != 86400 {
+		t.Fatalf("systemUptime = %d, want 86400", got)
+	}
+}
+
+func TestSystemUptime_NaN(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("NaN 0.00\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-3 * time.Minute)
+	got := systemUptime(start)
+	if got < 175 || got > 185 {
+		t.Fatalf("systemUptime NaN fallback = %d, want ~180", got)
+	}
+}
+
+func TestSystemUptime_Negative(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("-100.0 0.00\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-1 * time.Minute)
+	got := systemUptime(start)
+	if got < 55 || got > 65 {
+		t.Fatalf("systemUptime negative fallback = %d, want ~60", got)
+	}
+}
+
+func TestSystemUptime_Inf(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("Inf 0.00\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-1 * time.Minute)
+	got := systemUptime(start)
+	if got < 55 || got > 65 {
+		t.Fatalf("systemUptime Inf fallback = %d, want ~60", got)
+	}
+}
+
+func TestSystemUptime_MalformedFile(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte("not-a-number idle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-2 * time.Minute)
+	got := systemUptime(start)
+	// Should fall back to service uptime (~120s).
+	if got < 115 || got > 125 {
+		t.Fatalf("systemUptime malformed fallback = %d, want ~120", got)
+	}
+}
+
+func TestSystemUptime_EmptyFile(t *testing.T) {
+	f := t.TempDir() + "/uptime"
+	if err := os.WriteFile(f, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old := procUptimePath
+	procUptimePath = f
+	defer func() { procUptimePath = old }()
+
+	start := time.Now().Add(-1 * time.Minute)
+	got := systemUptime(start)
+	if got < 55 || got > 65 {
+		t.Fatalf("systemUptime empty fallback = %d, want ~60", got)
 	}
 }
 
