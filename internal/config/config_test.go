@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -238,5 +240,266 @@ func TestApplyEnv_PluginsWhitespaceOnlyPreservesYAML(t *testing.T) {
 	// Whitespace-only should be ignored, preserving YAML value
 	if len(cfg.EnabledPlugins) != 1 || cfg.EnabledPlugins[0] != "update" {
 		t.Errorf("enabled_plugins: got %v, want [update]", cfg.EnabledPlugins)
+	}
+}
+
+func TestPluginConfig(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// No plugins section — returns nil
+	if got := cfg.PluginConfig("update"); got != nil {
+		t.Fatalf("expected nil for missing plugin, got %v", got)
+	}
+
+	// Set a value
+	cfg.SetPluginConfig("update", "schedule", "0 3 * * *")
+	cfg.SetPluginConfig("update", "auto_security", true)
+
+	pc := cfg.PluginConfig("update")
+	if pc == nil {
+		t.Fatal("expected non-nil plugin config after SetPluginConfig")
+	}
+	if pc["schedule"] != "0 3 * * *" {
+		t.Errorf("schedule: got %v, want %q", pc["schedule"], "0 3 * * *")
+	}
+	if pc["auto_security"] != true {
+		t.Errorf("auto_security: got %v, want true", pc["auto_security"])
+	}
+
+	// Non-existent plugin still returns nil
+	if got := cfg.PluginConfig("network"); got != nil {
+		t.Fatalf("expected nil for network, got %v", got)
+	}
+}
+
+func TestLoadYAMLWithPluginSections(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	yamlData := `listen_host: "0.0.0.0"
+listen_port: 7788
+plugins:
+  update:
+    schedule: "0 5 * * *"
+    auto_security: true
+    security_source: "available"
+  network:
+    dns_override: "8.8.8.8"
+`
+	if err := os.WriteFile(path, []byte(yamlData), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	up := cfg.PluginConfig("update")
+	if up == nil {
+		t.Fatal("expected update plugin config")
+	}
+	if up["schedule"] != "0 5 * * *" {
+		t.Errorf("schedule: got %v, want %q", up["schedule"], "0 5 * * *")
+	}
+	if up["auto_security"] != true {
+		t.Errorf("auto_security: got %v, want true", up["auto_security"])
+	}
+	if up["security_source"] != "available" {
+		t.Errorf("security_source: got %v, want %q", up["security_source"], "available")
+	}
+
+	net := cfg.PluginConfig("network")
+	if net == nil {
+		t.Fatal("expected network plugin config")
+	}
+	if net["dns_override"] != "8.8.8.8" {
+		t.Errorf("dns_override: got %v, want %q", net["dns_override"], "8.8.8.8")
+	}
+}
+
+func TestSave(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.yaml")
+
+	cfg := DefaultConfig()
+	cfg.ListenHost = "0.0.0.0"
+	cfg.EnabledPlugins = []string{"update", "network"}
+	cfg.SetPluginConfig("update", "schedule", "0 3 * * *")
+	cfg.SetPluginConfig("update", "auto_security", true)
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// Verify file exists and is readable
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("saved config is empty")
+	}
+}
+
+func TestSaveLoadRoundTrip(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "roundtrip.yaml")
+
+	original := DefaultConfig()
+	original.ListenHost = "0.0.0.0"
+	original.ListenPort = 9090
+	original.LogLevel = "debug"
+	original.EnabledPlugins = []string{"update"}
+	original.SetPluginConfig("update", "schedule", "0 5 * * *")
+	original.SetPluginConfig("update", "auto_security", true)
+	original.SetPluginConfig("update", "security_source", "available")
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if loaded.ListenHost != original.ListenHost {
+		t.Errorf("host: got %q, want %q", loaded.ListenHost, original.ListenHost)
+	}
+	if loaded.ListenPort != original.ListenPort {
+		t.Errorf("port: got %d, want %d", loaded.ListenPort, original.ListenPort)
+	}
+	if loaded.LogLevel != original.LogLevel {
+		t.Errorf("log_level: got %q, want %q", loaded.LogLevel, original.LogLevel)
+	}
+	if len(loaded.EnabledPlugins) != 1 || loaded.EnabledPlugins[0] != "update" {
+		t.Errorf("enabled_plugins: got %v, want [update]", loaded.EnabledPlugins)
+	}
+
+	up := loaded.PluginConfig("update")
+	if up == nil {
+		t.Fatal("expected update plugin config after round-trip")
+	}
+	if up["schedule"] != "0 5 * * *" {
+		t.Errorf("schedule: got %v, want %q", up["schedule"], "0 5 * * *")
+	}
+	if up["auto_security"] != true {
+		t.Errorf("auto_security: got %v, want true", up["auto_security"])
+	}
+	if up["security_source"] != "available" {
+		t.Errorf("security_source: got %v, want %q", up["security_source"], "available")
+	}
+}
+
+func TestSaveEmptyPath(t *testing.T) {
+	// Empty path falls back to defaultConfigPath (/etc/cm/config.yaml).
+	// Skip if that path is writable (e.g., root in CI container).
+	if _, err := os.Stat("/etc/cm"); err == nil {
+		t.Skip("default config directory exists; skipping to avoid side effects")
+	}
+	cfg := DefaultConfig()
+	err := cfg.Save("")
+	if err == nil {
+		t.Fatal("expected error writing to default path in test env")
+	}
+}
+
+func TestSaveBadPath(t *testing.T) {
+	cfg := DefaultConfig()
+	err := cfg.Save("/nonexistent/dir/config.yaml")
+	if err == nil {
+		t.Fatal("expected error for bad path")
+	}
+}
+
+func TestSetPluginConfigOverwrite(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SetPluginConfig("update", "schedule", "0 3 * * *")
+	cfg.SetPluginConfig("update", "schedule", "0 5 * * *")
+
+	pc := cfg.PluginConfig("update")
+	if pc["schedule"] != "0 5 * * *" {
+		t.Errorf("schedule: got %v, want %q (overwritten value)", pc["schedule"], "0 5 * * *")
+	}
+}
+
+func TestSaveNilPlugins(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "noplugins.yaml")
+
+	cfg := DefaultConfig()
+	// Plugins is nil — omitempty should omit it from YAML
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if strings.Contains(string(data), "\nplugins:") {
+		t.Errorf("YAML should not contain 'plugins:' section when nil, got:\n%s", data)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if loaded.Plugins != nil {
+		t.Errorf("expected nil Plugins after round-trip, got %v", loaded.Plugins)
+	}
+}
+
+func TestSaveFilePermissions(t *testing.T) {
+	if os.Getenv("CI") != "" || runtime.GOOS == "windows" {
+		t.Skip("file permission test only reliable on local Linux/macOS")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "perms.yaml")
+
+	cfg := DefaultConfig()
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	perm := info.Mode().Perm()
+	if perm != 0o600 {
+		t.Errorf("file permissions: got %o, want 0600", perm)
+	}
+}
+
+func TestSaveIntRoundTrip(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "types.yaml")
+
+	cfg := DefaultConfig()
+	cfg.SetPluginConfig("update", "retries", 5)
+	cfg.SetPluginConfig("update", "enabled", true)
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	up := loaded.PluginConfig("update")
+	// yaml.v3 preserves int (not float64) for integer values
+	if v, ok := up["retries"].(int); !ok || v != 5 {
+		t.Errorf("retries: got %v (%T), want 5 (int)", up["retries"], up["retries"])
+	}
+	if v, ok := up["enabled"].(bool); !ok || v != true {
+		t.Errorf("enabled: got %v (%T), want true (bool)", up["enabled"], up["enabled"])
 	}
 }
