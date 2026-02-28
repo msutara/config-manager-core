@@ -67,11 +67,12 @@ func MetadataFrom(p Plugin) Metadata {
 	if eps == nil {
 		eps = []Endpoint{}
 	}
+	name := p.Name()
 	return Metadata{
-		Name:        p.Name(),
+		Name:        name,
 		Version:     p.Version(),
 		Description: p.Description(),
-		RoutePrefix: RouteBase + p.Name(),
+		RoutePrefix: RouteBase + name,
 		Endpoints:   eps,
 	}
 }
