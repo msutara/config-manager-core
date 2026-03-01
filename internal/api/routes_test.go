@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
@@ -446,6 +447,25 @@ func (m *mockConfigPlugin) CurrentConfig() map[string]any {
 	return m.cfg
 }
 
+// routedConfigPlugin is like mockConfigPlugin but returns a Chi router from
+// Routes(), simulating a real plugin (e.g. update) that mounts its own routes.
+// Without the injected /settings routes, the plugin mount shadows the core's
+// parameterized /plugins/{name}/settings route.
+type routedConfigPlugin struct {
+	mockConfigPlugin
+}
+
+func (r *routedConfigPlugin) Name() string { return "routed" }
+
+func (r *routedConfigPlugin) Routes() http.Handler {
+	rr := chi.NewRouter()
+	rr.Get("/status", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	return rr
+}
+
 // mockConfigProvider implements ConfigProvider for testing.
 type mockConfigProvider struct {
 	plugins map[string]map[string]any
@@ -862,5 +882,104 @@ func TestHandleUpdatePluginConfig_BodyTooLarge(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestSettingsRouteWithPluginMount verifies that GET/PUT /settings works even
+// when the plugin provides its own Routes() handler (which Chi mounts and
+// would otherwise shadow the parameterized /plugins/{name}/settings route).
+func TestSettingsRouteWithPluginMount_GET(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &routedConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 5 * * *"})
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/routed/settings", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	cfg, ok := body["config"].(map[string]any)
+	if !ok {
+		t.Fatal("response missing 'config' envelope")
+	}
+	if cfg["schedule"] != "0 5 * * *" {
+		t.Errorf("schedule: got %v, want '0 5 * * *'", cfg["schedule"])
+	}
+}
+
+func TestSettingsRouteWithPluginMount_PUT(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &routedConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 5 * * *"})
+	plugin.Register(mp)
+
+	cfgProv := &mockConfigProvider{
+		plugins: map[string]map[string]any{"routed": {"schedule": "0 5 * * *"}},
+	}
+	sched := &mockScheduler{}
+	srv := NewServer("localhost", 0, sched, cfgProv, "", nil)
+
+	payload := `{"key":"schedule","value":"0 6 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/routed/settings",
+		bytes.NewBufferString(payload))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	cfgVal, ok := body["config"]
+	if !ok {
+		t.Fatalf("response missing 'config' field: %#v", body)
+	}
+	cfg, ok := cfgVal.(map[string]any)
+	if !ok {
+		t.Fatalf("response 'config' field has unexpected type %T: %#v", cfgVal, cfgVal)
+	}
+	if cfg["schedule"] != "0 6 * * *" {
+		t.Errorf("schedule: got %v, want '0 6 * * *'", cfg["schedule"])
+	}
+	if !cfgProv.saved {
+		t.Error("config should have been persisted")
+	}
+	if v := cfgProv.plugins["routed"]["schedule"]; v != "0 6 * * *" {
+		t.Errorf("persisted schedule: got %v, want '0 6 * * *'", v)
+	}
+}
+
+// TestSettingsRouteWithPluginMount_PluginRouteStillWorks ensures the plugin's
+// own routes (e.g. /status) remain functional after /settings injection.
+func TestSettingsRouteWithPluginMount_PluginRouteStillWorks(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &routedConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 5 * * *"})
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/routed/status", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	if w.Body.String() != `{"status":"ok"}` {
+		t.Errorf("body: got %q, want %q", w.Body.String(), `{"status":"ok"}`)
 	}
 }

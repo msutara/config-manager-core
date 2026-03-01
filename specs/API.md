@@ -138,7 +138,103 @@ Get metadata for a specific plugin.
 
 ---
 
-### 4.5. `GET /api/v1/jobs`
+### 4.5. `GET /api/v1/plugins/{name}/settings`
+
+Get a plugin's configurable settings. Only plugins implementing the
+`Configurable` interface support this endpoint.
+
+**Note:** The `/settings` endpoint is a core-managed route that is mounted
+alongside any plugin-provided routes such as `/config`. The core wraps each
+plugin's handler so `GET /api/v1/plugins/{name}/settings` remains reachable
+even though the plugin itself is mounted at `/api/v1/plugins/{name}` and may
+define its own sub-routes. Configuration exposed via `/settings` is distinct
+from any plugin-specific APIs.
+
+**Path params:**
+
+- `name`: plugin name.
+
+**Response 200:**
+
+```json
+{
+  "config": {
+    "schedule": "0 3 * * *",
+    "auto_security": true,
+    "security_source": "available"
+  }
+}
+```
+
+**Response 404** (plugin not found):
+
+```json
+{
+  "error": {
+    "code": "plugin_not_found",
+    "message": "Plugin 'foo' not found",
+    "details": {}
+  }
+}
+```
+
+**Response 501** (plugin not configurable):
+
+```json
+{
+  "error": {
+    "code": "not_configurable",
+    "message": "Plugin 'network' does not support configuration",
+    "details": {}
+  }
+}
+```
+
+---
+
+### 4.6. `PUT /api/v1/plugins/{name}/settings`
+
+Update a single setting for a plugin. When a ConfigProvider is configured,
+the change is persisted via the provider (for example, writing to disk) and
+hot-reloaded in memory. Without a ConfigProvider, the change only affects
+in-memory state for the current process. If the key is `schedule`, the
+scheduler job `{name}.security` is rescheduled using the new value.
+
+**Path params:**
+
+- `name`: plugin name.
+
+**Request body:**
+
+```json
+{"key": "schedule", "value": "0 4 * * *"}
+```
+
+**Response 200:**
+
+```json
+{
+  "config": {"schedule": "0 4 * * *", "auto_security": true, "security_source": "available"}
+}
+```
+
+The `warning` field is included only when non-empty (e.g. scheduler update failed).
+
+**Response 400** (invalid key / value):
+
+```json
+{
+  "error": {
+    "code": "invalid_config",
+    "message": "unknown config key: bad_key",
+    "details": {}
+  }
+}
+```
+
+---
+
+### 4.7. `GET /api/v1/jobs`
 
 List scheduled jobs from all plugins.
 
@@ -168,7 +264,7 @@ List scheduled jobs from all plugins.
 
 ---
 
-### 4.6. `POST /api/v1/jobs/trigger`
+### 4.8. `POST /api/v1/jobs/trigger`
 
 Trigger a job by ID.
 
