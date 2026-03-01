@@ -198,7 +198,7 @@ Update a single setting for a plugin. When a ConfigProvider is configured,
 the change is persisted via the provider (for example, writing to disk) and
 hot-reloaded in memory. Without a ConfigProvider, the change only affects
 in-memory state for the current process. If the key is `schedule`, the
-scheduler is rescheduled.
+scheduler job `{name}.security` is rescheduled using the new value.
 
 **Path params:**
 
