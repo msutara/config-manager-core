@@ -224,8 +224,32 @@ func getConfigurablePlugin(w http.ResponseWriter, name string) (plugin.Configura
 	return c, true
 }
 
+// pluginConfigHandler returns a GET handler for a specific plugin's config.
+// Used to inject /settings into plugin routers where chi.URLParam is unavailable.
+func (s *Server) pluginConfigHandler(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.getPluginConfig(w, r, name)
+	}
+}
+
+// pluginConfigUpdateHandler returns a PUT handler for a specific plugin's config.
+// Used to inject /settings into plugin routers where chi.URLParam is unavailable.
+func (s *Server) pluginConfigUpdateHandler(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.updatePluginConfig(w, r, name)
+	}
+}
+
 func (s *Server) handleGetPluginConfig(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+	s.getPluginConfig(w, r, chi.URLParam(r, "name"))
+}
+
+func (s *Server) handleUpdatePluginConfig(w http.ResponseWriter, r *http.Request) {
+	s.updatePluginConfig(w, r, chi.URLParam(r, "name"))
+}
+
+// getPluginConfig is the shared implementation for GET /settings.
+func (s *Server) getPluginConfig(w http.ResponseWriter, _ *http.Request, name string) {
 	c, ok := getConfigurablePlugin(w, name)
 	if !ok {
 		return
@@ -238,8 +262,8 @@ func (s *Server) handleGetPluginConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"config": cfg})
 }
 
-func (s *Server) handleUpdatePluginConfig(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+// updatePluginConfig is the shared implementation for PUT /settings.
+func (s *Server) updatePluginConfig(w http.ResponseWriter, r *http.Request, name string) {
 	c, ok := getConfigurablePlugin(w, name)
 	if !ok {
 		return
@@ -285,7 +309,7 @@ func (s *Server) handleUpdatePluginConfig(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// If schedule changed, validate cron first, then notify the scheduler.
+	// If schedule changed, notify the scheduler.
 	var warning string
 	if req.Key == "schedule" && s.scheduler != nil {
 		cron := req.Value.(string)  // safe: validated above

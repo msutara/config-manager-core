@@ -138,7 +138,78 @@ Get metadata for a specific plugin.
 
 ---
 
-### 4.5. `GET /api/v1/jobs`
+### 4.5. `GET /api/v1/plugins/{name}/settings`
+
+Get a plugin's configurable settings. Only plugins implementing the
+`Configurable` interface support this endpoint.
+
+**Note:** These routes are injected into each plugin's own router so they
+are reachable even though the plugin mount would otherwise shadow the
+parameterized path.
+
+**Path params:**
+
+- `name`: plugin name.
+
+**Response 200:**
+
+```json
+{
+  "config": {
+    "schedule": "0 3 * * *",
+    "auto_security": true,
+    "security_source": "available"
+  }
+}
+```
+
+**Response 404** (plugin not found):
+
+```json
+{"error": {"code": "plugin_not_found", "message": "Plugin 'foo' not found"}}
+```
+
+**Response 501** (plugin not configurable):
+
+```json
+{"error": {"code": "not_configurable", "message": "Plugin 'network' does not support configuration"}}
+```
+
+---
+
+### 4.6. `PUT /api/v1/plugins/{name}/settings`
+
+Update a single setting for a plugin. Writes to disk and hot-reloads in
+memory. If the key is `schedule`, the scheduler is rescheduled.
+
+**Path params:**
+
+- `name`: plugin name.
+
+**Request body:**
+
+```json
+{"key": "schedule", "value": "0 4 * * *"}
+```
+
+**Response 200:**
+
+```json
+{
+  "config": {"schedule": "0 4 * * *", "auto_security": true, "security_source": "available"},
+  "warning": ""
+}
+```
+
+**Response 400** (invalid key / value):
+
+```json
+{"error": {"code": "invalid_config", "message": "unknown config key: bad_key"}}
+```
+
+---
+
+### 4.7. `GET /api/v1/jobs`
 
 List scheduled jobs from all plugins.
 
@@ -168,7 +239,7 @@ List scheduled jobs from all plugins.
 
 ---
 
-### 4.6. `POST /api/v1/jobs/trigger`
+### 4.8. `POST /api/v1/jobs/trigger`
 
 Trigger a job by ID.
 
