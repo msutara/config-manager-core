@@ -20,6 +20,17 @@ type Config struct {
 	EnabledPlugins []string                  `yaml:"enabled_plugins"` // empty = all enabled
 	LogLevel       string                    `yaml:"log_level"`
 	Plugins        map[string]map[string]any `yaml:"plugins,omitempty"`
+
+	path string `yaml:"-"` // file path used by Load, not serialized
+}
+
+// Path returns the file path from which this config was loaded.
+// Returns the default path if Load was not called.
+func (c *Config) Path() string {
+	if c.path == "" {
+		return defaultConfigPath
+	}
+	return c.path
 }
 
 // PluginConfig returns the config map for a specific plugin.
@@ -110,6 +121,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := DefaultConfig()
+	cfg.path = path
 
 	data, err := os.ReadFile(path)
 	if err != nil {

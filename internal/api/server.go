@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,6 +17,8 @@ import (
 type Server struct {
 	httpServer *http.Server
 	scheduler  JobTriggerer
+	cfg        ConfigProvider
+	cfgMu      sync.RWMutex // serializes config mutations; readers use RLock
 	startTime  time.Time
 	errCh      chan error
 }
@@ -29,6 +32,16 @@ func (s *Server) Err() <-chan error {
 type JobTriggerer interface {
 	TriggerJob(id string) error
 	JobExists(id string) bool
+	Reschedule(id, cron string) error
+}
+
+// ConfigProvider abstracts config persistence so the API can update
+// plugin config and save to disk without importing the config package.
+type ConfigProvider interface {
+	PluginConfig(name string) map[string]any
+	SetPluginConfig(plugin, key string, value any)
+	Save(path string) error
+	Path() string
 }
 
 // slogLogger is a Chi middleware that logs HTTP requests using log/slog.
@@ -51,12 +64,12 @@ func slogLogger(next http.Handler) http.Handler {
 // When authToken is non-empty, all endpoints except /api/v1/health require
 // a valid Bearer token. If webHandler is non-nil it is mounted at the root
 // for the browser-based dashboard.
-func NewServer(host string, port int, sched JobTriggerer, authToken string, webHandler http.Handler) *Server {
+func NewServer(host string, port int, sched JobTriggerer, cfg ConfigProvider, authToken string, webHandler http.Handler) *Server {
 	r := chi.NewRouter()
 	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
 
-	s := &Server{scheduler: sched, startTime: time.Now(), errCh: make(chan error, 1)}
+	s := &Server{scheduler: sched, cfg: cfg, startTime: time.Now(), errCh: make(chan error, 1)}
 
 	// Health endpoint — public, no auth required (used for auto-detection).
 	r.Get("/api/v1/health", handleHealth)
@@ -69,6 +82,8 @@ func NewServer(host string, port int, sched JobTriggerer, authToken string, webH
 			r.Get("/node", s.handleNode)
 			r.Get("/plugins", handleListPlugins)
 			r.Get("/plugins/{name}", handleGetPlugin)
+			r.Get("/plugins/{name}/settings", s.handleGetPluginConfig)
+			r.Put("/plugins/{name}/settings", s.handleUpdatePluginConfig)
 			r.Get("/jobs", handleListJobs)
 			r.Post("/jobs/trigger", s.handleTriggerJob)
 		})
