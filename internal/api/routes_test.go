@@ -943,7 +943,14 @@ func TestSettingsRouteWithPluginMount_PUT(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	cfg := body["config"].(map[string]any)
+	cfgVal, ok := body["config"]
+	if !ok {
+		t.Fatalf("response missing 'config' field: %#v", body)
+	}
+	cfg, ok := cfgVal.(map[string]any)
+	if !ok {
+		t.Fatalf("response 'config' field has unexpected type %T: %#v", cfgVal, cfgVal)
+	}
 	if cfg["schedule"] != "0 6 * * *" {
 		t.Errorf("schedule: got %v, want '0 6 * * *'", cfg["schedule"])
 	}

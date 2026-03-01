@@ -143,9 +143,12 @@ Get metadata for a specific plugin.
 Get a plugin's configurable settings. Only plugins implementing the
 `Configurable` interface support this endpoint.
 
-**Note:** These routes are injected into each plugin's own router so they
-are reachable even though the plugin mount would otherwise shadow the
-parameterized path.
+**Note:** The `/settings` endpoint is a core-managed route that is mounted
+alongside any plugin-provided routes such as `/config`. The core wraps each
+plugin's handler so `GET /api/v1/plugins/{name}/settings` remains reachable
+even though the plugin itself is mounted at `/api/v1/plugins/{name}` and may
+define its own sub-routes. Configuration exposed via `/settings` is distinct
+from any plugin-specific APIs.
 
 **Path params:**
 
