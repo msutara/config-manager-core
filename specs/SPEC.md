@@ -84,9 +84,9 @@ Those concerns are handled by plugins and external tools.
   - Optionally defines scheduled jobs.
   - Is imported into `cmd/cm/main.go` at build time.
 - Core mounts plugin routes under `/api/v1/plugins/{plugin_name}`.
-- Core injects `GET/PUT /settings` handlers into each plugin's router so the
-  settings endpoint is reachable despite the mount prefix shadowing the
-  parameterized route.
+- Core wraps each plugin handler in a Chi router with `GET/PUT /settings`
+  so the settings endpoint is reachable regardless of the plugin's handler
+  type (the mount prefix would otherwise shadow the parameterized route).
 - Adding a new plugin = one import line + rebuild.
 
 ---

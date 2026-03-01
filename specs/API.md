@@ -166,21 +166,36 @@ parameterized path.
 **Response 404** (plugin not found):
 
 ```json
-{"error": {"code": "plugin_not_found", "message": "Plugin 'foo' not found"}}
+{
+  "error": {
+    "code": "plugin_not_found",
+    "message": "Plugin 'foo' not found",
+    "details": {}
+  }
+}
 ```
 
 **Response 501** (plugin not configurable):
 
 ```json
-{"error": {"code": "not_configurable", "message": "Plugin 'network' does not support configuration"}}
+{
+  "error": {
+    "code": "not_configurable",
+    "message": "Plugin 'network' does not support configuration",
+    "details": {}
+  }
+}
 ```
 
 ---
 
 ### 4.6. `PUT /api/v1/plugins/{name}/settings`
 
-Update a single setting for a plugin. Writes to disk and hot-reloads in
-memory. If the key is `schedule`, the scheduler is rescheduled.
+Update a single setting for a plugin. When a ConfigProvider is configured,
+the change is persisted via the provider (for example, writing to disk) and
+hot-reloaded in memory. Without a ConfigProvider, the change only affects
+in-memory state for the current process. If the key is `schedule`, the
+scheduler is rescheduled.
 
 **Path params:**
 
@@ -196,15 +211,22 @@ memory. If the key is `schedule`, the scheduler is rescheduled.
 
 ```json
 {
-  "config": {"schedule": "0 4 * * *", "auto_security": true, "security_source": "available"},
-  "warning": ""
+  "config": {"schedule": "0 4 * * *", "auto_security": true, "security_source": "available"}
 }
 ```
+
+The `warning` field is included only when non-empty (e.g. scheduler update failed).
 
 **Response 400** (invalid key / value):
 
 ```json
-{"error": {"code": "invalid_config", "message": "unknown config key: bad_key"}}
+{
+  "error": {
+    "code": "invalid_config",
+    "message": "unknown config key: bad_key",
+    "details": {}
+  }
+}
 ```
 
 ---

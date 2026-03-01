@@ -89,17 +89,18 @@ func NewServer(host string, port int, sched JobTriggerer, cfg ConfigProvider, au
 		})
 
 		// Plugin routes — compute handlers once, outside the registry lock.
-		// Inject /settings GET/PUT into each plugin's Chi router so the
-		// core settings handlers are reachable despite the Mount prefix
-		// shadowing the parameterized /plugins/{name}/settings route.
+		// Wrap each plugin handler in a Chi router so /settings GET/PUT
+		// is always reachable regardless of the underlying handler type.
+		// Without this, r.Mount's literal prefix shadows the parameterized
+		// /plugins/{name}/settings route.
 		pluginRoutes := plugin.AllRoutes()
 		for name, handler := range pluginRoutes {
-			if cr, ok := handler.(chi.Router); ok {
-				n := name
-				cr.Get("/settings", s.pluginConfigHandler(n))
-				cr.Put("/settings", s.pluginConfigUpdateHandler(n))
-			}
-			r.Mount(plugin.RouteBase+name, handler)
+			n := name
+			wrapper := chi.NewRouter()
+			wrapper.Mount("/", handler)
+			wrapper.Get("/settings", s.pluginConfigHandler(n))
+			wrapper.Put("/settings", s.pluginConfigUpdateHandler(n))
+			r.Mount(plugin.RouteBase+name, wrapper)
 		}
 	})
 
