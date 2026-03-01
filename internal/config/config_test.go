@@ -503,3 +503,28 @@ func TestSaveIntRoundTrip(t *testing.T) {
 		t.Errorf("enabled: got %v (%T), want true (bool)", up["enabled"], up["enabled"])
 	}
 }
+
+func TestPathDefault(t *testing.T) {
+	cfg := DefaultConfig()
+	got := cfg.Path()
+	if got != defaultConfigPath {
+		t.Errorf("Path() = %q, want default %q", got, defaultConfigPath)
+	}
+}
+
+func TestPathFromLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test-config.yaml")
+	cfg := DefaultConfig()
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Path() != path {
+		t.Errorf("Path() = %q, want %q", loaded.Path(), path)
+	}
+}

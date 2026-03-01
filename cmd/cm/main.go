@@ -152,6 +152,21 @@ func main() {
 	// Apply enabled_plugins filter from config
 	plugin.DisableExcept(cfg.EnabledPlugins)
 
+	// Pass persisted config to plugins that support it.
+	for _, p := range plugin.List() {
+		if c, ok := p.(plugin.Configurable); ok {
+			raw := cfg.PluginConfig(p.Name())
+			if raw != nil {
+				safe := make(map[string]any, len(raw))
+				for k, v := range raw {
+					safe[k] = v
+				}
+				raw = safe
+			}
+			c.Configure(raw)
+		}
+	}
+
 	// Log registered plugins (after filtering)
 	plugins := plugin.List()
 	slog.Info("plugins loaded", "count", len(plugins))
@@ -186,7 +201,7 @@ func main() {
 	webHandler := web.NewHandler(apiBaseURL, authToken)
 
 	// Create API server (not started yet — TUI mode probes first).
-	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched, authToken, webHandler)
+	srv := api.NewServer(cfg.ListenHost, cfg.ListenPort, sched, cfg, authToken, webHandler)
 
 	// Track whether a fatal error occurred.
 	var exitFailed atomic.Bool

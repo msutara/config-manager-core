@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"math"
 	"net/http"
@@ -199,4 +200,143 @@ func (s *Server) handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 		"status": "accepted",
 		"job_id": req.JobID,
 	})
+}
+
+// maxConfigBody is the maximum request body for config updates (64 KB).
+const maxConfigBody = 64 << 10
+
+// getConfigurablePlugin resolves a plugin by name and asserts it implements
+// Configurable. Returns the Configurable and true on success; writes an
+// error response and returns false otherwise.
+func getConfigurablePlugin(w http.ResponseWriter, name string) (plugin.Configurable, bool) {
+	p, ok := plugin.Get(name)
+	if !ok {
+		writeError(w, http.StatusNotFound, "plugin_not_found",
+			"Plugin '"+name+"' not found")
+		return nil, false
+	}
+	c, ok := p.(plugin.Configurable)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "not_configurable",
+			"Plugin '"+name+"' does not support configuration")
+		return nil, false
+	}
+	return c, true
+}
+
+func (s *Server) handleGetPluginConfig(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	c, ok := getConfigurablePlugin(w, name)
+	if !ok {
+		return
+	}
+	cfg := func() map[string]any {
+		s.cfgMu.RLock()
+		defer s.cfgMu.RUnlock()
+		return copyMap(c.CurrentConfig())
+	}()
+	writeJSON(w, http.StatusOK, map[string]any{"config": cfg})
+}
+
+func (s *Server) handleUpdatePluginConfig(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	c, ok := getConfigurablePlugin(w, name)
+	if !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxConfigBody)
+	var req struct {
+		Key   string `json:"key"`
+		Value any    `json:"value"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body")
+		return
+	}
+	if req.Key == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "key is required")
+		return
+	}
+
+	// Validate that schedule values are strings before accepting.
+	if req.Key == "schedule" {
+		if _, ok := req.Value.(string); !ok {
+			writeError(w, http.StatusBadRequest, "invalid_config",
+				"schedule value must be a string")
+			return
+		}
+	}
+
+	// Serialize the entire update (plugin state + persistence + response read)
+	// to prevent concurrent map writes on the plugin's in-memory config.
+	cfg, err := func() (map[string]any, error) {
+		s.cfgMu.Lock()
+		defer s.cfgMu.Unlock()
+		return s.applyConfigUpdate(name, c, req.Key, req.Value)
+	}()
+	if err != nil {
+		if err == errSaveFailed {
+			writeError(w, http.StatusInternalServerError, "save_failed",
+				"Config applied but failed to persist; see server logs for details")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		}
+		return
+	}
+
+	// If schedule changed, validate cron first, then notify the scheduler.
+	var warning string
+	if req.Key == "schedule" && s.scheduler != nil {
+		cron := req.Value.(string)  // safe: validated above
+		jobID := name + ".security" // convention: {plugin}.{job}
+		if err := s.scheduler.Reschedule(jobID, cron); err != nil {
+			slog.Warn("reschedule failed after config update",
+				"job_id", jobID, "cron", cron, "error", err)
+			warning = "config saved but scheduler update failed; see server logs for details"
+		}
+	}
+
+	slog.Info("plugin config updated", "plugin", name, "key", req.Key)
+
+	resp := map[string]any{"config": cfg}
+	if warning != "" {
+		resp["warning"] = warning
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// sentinel used to distinguish save failures from plugin validation errors.
+var errSaveFailed = errors.New("save failed")
+
+// applyConfigUpdate performs the plugin update, persistence, and config
+// snapshot. Must be called while holding cfgMu.
+func (s *Server) applyConfigUpdate(name string, c plugin.Configurable, key string, value any) (map[string]any, error) {
+	if err := c.UpdateConfig(key, value); err != nil {
+		return nil, err
+	}
+
+	if s.cfg != nil {
+		s.cfg.SetPluginConfig(name, key, value)
+		if err := s.cfg.Save(s.cfg.Path()); err != nil {
+			slog.Error("failed to save config", "error", err)
+			return nil, errSaveFailed
+		}
+	}
+
+	return copyMap(c.CurrentConfig()), nil
+}
+
+// copyMap returns a shallow copy of the map, safe for use outside a lock.
+// Shallow copy is sufficient: config values are JSON primitives (string,
+// bool, float64) — no nested mutable objects in current design.
+func copyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }

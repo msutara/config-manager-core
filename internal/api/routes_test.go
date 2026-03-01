@@ -15,8 +15,9 @@ import (
 
 // mockScheduler implements JobTriggerer for testing.
 type mockScheduler struct {
-	triggerFunc func(id string) error
-	existsFunc  func(id string) bool
+	triggerFunc    func(id string) error
+	existsFunc     func(id string) bool
+	rescheduleFunc func(id, cron string) error
 }
 
 func (m *mockScheduler) TriggerJob(id string) error {
@@ -31,6 +32,13 @@ func (m *mockScheduler) JobExists(id string) bool {
 		return m.existsFunc(id)
 	}
 	return true
+}
+
+func (m *mockScheduler) Reschedule(id, cron string) error {
+	if m.rescheduleFunc != nil {
+		return m.rescheduleFunc(id, cron)
+	}
+	return nil
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -169,7 +177,7 @@ func TestSystemUptime_EmptyFile(t *testing.T) {
 
 func TestHandleNode(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil, "", nil)
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/node", nil)
 	srv.handleNode(w, r)
@@ -213,7 +221,7 @@ func TestHandleListPlugins(t *testing.T) {
 func TestHandleGetPluginNotFound(t *testing.T) {
 	plugin.ResetForTesting()
 
-	srv := NewServer("localhost", 0, nil, "", nil)
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/missing", nil)
 	srv.httpServer.Handler.ServeHTTP(w, r)
@@ -302,7 +310,7 @@ func TestNewServerIntegration(t *testing.T) {
 			return true
 		},
 	}
-	srv := NewServer("localhost", 0, sched, "", nil)
+	srv := NewServer("localhost", 0, sched, nil, "", nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -319,7 +327,7 @@ func TestNewServerIntegration(t *testing.T) {
 
 func TestNewServerAuthIntegration(t *testing.T) {
 	plugin.ResetForTesting()
-	srv := NewServer("localhost", 0, nil, "integ-secret", nil)
+	srv := NewServer("localhost", 0, nil, nil, "integ-secret", nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -388,7 +396,7 @@ func TestWebHandlerMountRouting(t *testing.T) {
 	stub := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(299)
 	})
-	srv := NewServer("localhost", 0, nil, "", stub)
+	srv := NewServer("localhost", 0, nil, nil, "", stub)
 
 	// "/" should be routed to the web handler stub.
 	w := httptest.NewRecorder()
@@ -404,5 +412,455 @@ func TestWebHandlerMountRouting(t *testing.T) {
 	srv.httpServer.Handler.ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET /api/v1/health: got %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+// mockConfigPlugin implements both plugin.Plugin and plugin.Configurable.
+type mockConfigPlugin struct {
+	cfg map[string]any
+}
+
+func (m *mockConfigPlugin) Name() string                          { return "mockconfig" }
+func (m *mockConfigPlugin) Version() string                       { return "0.1.0" }
+func (m *mockConfigPlugin) Description() string                   { return "mock configurable plugin" }
+func (m *mockConfigPlugin) Routes() http.Handler                  { return nil }
+func (m *mockConfigPlugin) ScheduledJobs() []plugin.JobDefinition { return nil }
+func (m *mockConfigPlugin) Endpoints() []plugin.Endpoint          { return nil }
+
+func (m *mockConfigPlugin) Configure(cfg map[string]any) {
+	m.cfg = make(map[string]any)
+	for k, v := range cfg {
+		m.cfg[k] = v
+	}
+}
+
+func (m *mockConfigPlugin) UpdateConfig(key string, value any) error {
+	if key == "bad_key" {
+		return errors.New("unknown config key: bad_key")
+	}
+	m.cfg[key] = value
+	return nil
+}
+
+func (m *mockConfigPlugin) CurrentConfig() map[string]any {
+	return m.cfg
+}
+
+// mockConfigProvider implements ConfigProvider for testing.
+type mockConfigProvider struct {
+	plugins map[string]map[string]any
+	saved   bool
+	saveErr error
+}
+
+func (m *mockConfigProvider) PluginConfig(name string) map[string]any {
+	if m.plugins == nil {
+		return nil
+	}
+	return m.plugins[name]
+}
+
+func (m *mockConfigProvider) SetPluginConfig(pluginName, key string, value any) {
+	if m.plugins == nil {
+		m.plugins = make(map[string]map[string]any)
+	}
+	if m.plugins[pluginName] == nil {
+		m.plugins[pluginName] = make(map[string]any)
+	}
+	m.plugins[pluginName][key] = value
+}
+
+func (m *mockConfigProvider) Save(_ string) error {
+	m.saved = true
+	return m.saveErr
+}
+
+func (m *mockConfigProvider) Path() string { return "/tmp/test-config.yaml" }
+
+func TestHandleGetPluginConfig(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 3 * * *"})
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/mockconfig/settings", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	cfg, ok := body["config"].(map[string]any)
+	if !ok {
+		t.Fatal("response missing 'config' envelope")
+	}
+	if cfg["schedule"] != "0 3 * * *" {
+		t.Errorf("schedule: got %v, want '0 3 * * *'", cfg["schedule"])
+	}
+}
+
+func TestHandleGetPluginConfig_NotFound(t *testing.T) {
+	plugin.ResetForTesting()
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/nope/settings", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404", w.Code)
+	}
+}
+
+// simplePlugin implements plugin.Plugin but NOT plugin.Configurable.
+type simplePlugin struct{ name string }
+
+func (s *simplePlugin) Name() string                          { return s.name }
+func (s *simplePlugin) Version() string                       { return "0.1.0" }
+func (s *simplePlugin) Description() string                   { return "simple" }
+func (s *simplePlugin) Routes() http.Handler                  { return nil }
+func (s *simplePlugin) ScheduledJobs() []plugin.JobDefinition { return nil }
+func (s *simplePlugin) Endpoints() []plugin.Endpoint          { return nil }
+
+func TestHandleGetPluginConfig_NotConfigurable(t *testing.T) {
+	plugin.ResetForTesting()
+	plugin.Register(&simplePlugin{name: "nocfg"})
+
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/plugins/nocfg/settings", nil)
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("got %d, want 501", w.Code)
+	}
+}
+
+func TestHandleUpdatePluginConfig(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 3 * * *"})
+	plugin.Register(mp)
+
+	cfgProv := &mockConfigProvider{}
+	sched := &mockScheduler{}
+
+	srv := NewServer("localhost", 0, sched, cfgProv, "", nil)
+
+	body := `{"key":"schedule","value":"0 4 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	r.Header.Set("Content-Type", "application/json")
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	// Verify plugin received the update.
+	if mp.cfg["schedule"] != "0 4 * * *" {
+		t.Errorf("plugin config not updated: %v", mp.cfg)
+	}
+
+	// Verify config was persisted.
+	if !cfgProv.saved {
+		t.Error("config was not saved")
+	}
+	if cfgProv.plugins["mockconfig"]["schedule"] != "0 4 * * *" {
+		t.Error("config provider not updated")
+	}
+
+	// Verify response envelope.
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["config"] == nil {
+		t.Error("response missing 'config' key")
+	}
+}
+
+func TestHandleUpdatePluginConfig_InvalidKey(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	body := `{"key":"bad_key","value":"x"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400", w.Code)
+	}
+}
+
+func TestHandleUpdatePluginConfig_EmptyKey(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, nil, nil, "", nil)
+
+	body := `{"key":"","value":"x"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400", w.Code)
+	}
+}
+
+func TestHandleUpdatePluginConfig_ScheduleReschedule(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	var rescheduledID, rescheduledCron string
+	sched := &mockScheduler{
+		rescheduleFunc: func(id, cron string) error {
+			rescheduledID = id
+			rescheduledCron = cron
+			return nil
+		},
+	}
+	cfgProv := &mockConfigProvider{}
+
+	srv := NewServer("localhost", 0, sched, cfgProv, "", nil)
+
+	body := `{"key":"schedule","value":"0 5 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+
+	if rescheduledID != "mockconfig.security" {
+		t.Errorf("reschedule job_id: got %q, want 'mockconfig.security'", rescheduledID)
+	}
+	if rescheduledCron != "0 5 * * *" {
+		t.Errorf("reschedule cron: got %q, want '0 5 * * *'", rescheduledCron)
+	}
+}
+
+func TestHandleUpdatePluginConfig_NotFound(t *testing.T) {
+	plugin.ResetForTesting()
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+
+	body := `{"key":"schedule","value":"0 4 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/nonexistent/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdatePluginConfig_NotConfigurable(t *testing.T) {
+	plugin.ResetForTesting()
+	plugin.Register(&simplePlugin{name: "simple"})
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+
+	body := `{"key":"schedule","value":"0 4 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/simple/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("got %d, want 501; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdatePluginConfig_MalformedJSON(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(`{invalid json`))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdatePluginConfig_SaveFails(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 3 * * *"})
+	plugin.Register(mp)
+
+	cfgProv := &mockConfigProvider{saveErr: errors.New("disk full")}
+	srv := NewServer("localhost", 0, &mockScheduler{}, cfgProv, "", nil)
+
+	body := `{"key":"schedule","value":"0 4 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want 500; body: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the error message does NOT leak internal details.
+	if bytes.Contains(w.Body.Bytes(), []byte("disk full")) {
+		t.Error("error message leaked internal details")
+	}
+}
+
+func TestHandleUpdatePluginConfig_NonScheduleKey(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	var rescheduleCalled bool
+	sched := &mockScheduler{
+		rescheduleFunc: func(_, _ string) error {
+			rescheduleCalled = true
+			return nil
+		},
+	}
+	cfgProv := &mockConfigProvider{}
+	srv := NewServer("localhost", 0, sched, cfgProv, "", nil)
+
+	body := `{"key":"auto_security","value":true}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	if rescheduleCalled {
+		t.Error("reschedule should not be called for non-schedule keys")
+	}
+}
+
+func TestHandleUpdatePluginConfig_ScheduleNonString(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+
+	body := `{"key":"schedule","value":42}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdatePluginConfig_RescheduleWarning(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	sched := &mockScheduler{
+		rescheduleFunc: func(_, _ string) error {
+			return errors.New("job not found")
+		},
+	}
+	cfgProv := &mockConfigProvider{}
+	srv := NewServer("localhost", 0, sched, cfgProv, "", nil)
+
+	body := `{"key":"schedule","value":"0 6 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["warning"] == nil {
+		t.Error("response should include warning when reschedule fails")
+	}
+}
+
+func TestHandleUpdatePluginConfig_NilConfigProvider(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(map[string]any{"schedule": "0 3 * * *"})
+	plugin.Register(mp)
+
+	// No ConfigProvider — config changes are in-memory only.
+	srv := NewServer("localhost", 0, &mockScheduler{}, nil, "", nil)
+
+	body := `{"key":"schedule","value":"0 4 * * *"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	if mp.cfg["schedule"] != "0 4 * * *" {
+		t.Errorf("plugin not updated: got %v", mp.cfg["schedule"])
+	}
+}
+
+func TestHandleUpdatePluginConfig_BodyTooLarge(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+
+	// Build a body larger than maxConfigBody (64 KB).
+	bigValue := bytes.Repeat([]byte("x"), 70*1024)
+	body := `{"key":"schedule","value":"` + string(bigValue) + `"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(body))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
 	}
 }
