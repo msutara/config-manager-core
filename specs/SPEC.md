@@ -113,7 +113,7 @@ Those concerns are handled by plugins and external tools.
 - **Web UI:**
   - Optional browser-based dashboard (config-manager-web).
   - Connects to the same REST API as the TUI.
-  - Served by the core binary when the web plugin is registered.
+  - Served by the core binary when a web handler is provided (e.g., when built with config-manager-web).
 
 ---
 

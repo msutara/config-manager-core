@@ -153,7 +153,7 @@ explicit service URL. Both modes can run side by side without crashing either.
 
 ## 6. API Endpoints
 
-Core exposes these REST endpoints (all require Bearer token except health):
+Core exposes these REST endpoints (when auth is enabled via `/etc/cm/auth.token`, all require a Bearer token except health):
 
 | Method | Path | Description |
 | --- | --- | --- |
