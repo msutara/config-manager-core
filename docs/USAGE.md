@@ -25,7 +25,14 @@ listen_host: localhost
 listen_port: 7788
 log_level: info
 enabled_plugins: []  # empty = all enabled
+theme: ""            # built-in name or absolute path to YAML theme file
+plugins:
+  update:
+    schedule: "0 2 * * 1"
+    auto_security: true
 ```
+
+The `plugins` section holds per-plugin configuration. Each key matches a plugin name.
 
 ### Environment Variable Overrides
 
@@ -37,6 +44,7 @@ Environment variables override YAML values. Set any combination:
 | `CM_LISTEN_PORT` | Listen port | `9090` |
 | `CM_LOG_LEVEL` | Log level (`debug`, `info`, `warn`, `error`) | `debug` |
 | `CM_ENABLED_PLUGINS` | Comma-separated plugin allowlist | `update,network` |
+| `CM_THEME` | TUI theme name or path | `nord` |
 
 ```bash
 # Override port and log level
@@ -143,7 +151,25 @@ CM auto-detects whether a headless service is already running:
 Use `--connect URL` to override auto-detection and force client mode with an
 explicit service URL. Both modes can run side by side without crashing either.
 
-## 6. Deployment
+## 6. API Endpoints
+
+Core exposes these REST endpoints (all require Bearer token except health):
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | Health check (public, no auth) |
+| `GET` | `/api/v1/node` | Node information (hostname, uptime, OS) |
+| `GET` | `/api/v1/plugins` | List registered plugins |
+| `GET` | `/api/v1/plugins/{name}` | Plugin metadata |
+| `GET` | `/api/v1/plugins/{name}/settings` | Plugin configuration |
+| `PUT` | `/api/v1/plugins/{name}/settings` | Update plugin configuration |
+| `GET` | `/api/v1/jobs` | List all scheduled jobs |
+| `POST` | `/api/v1/jobs/trigger` | Trigger a job by ID |
+| `GET` | `/api/v1/jobs/{id}/runs/latest` | Latest run status for a job |
+
+Plugin routes are mounted under `/api/v1/plugins/{name}/...`.
+
+## 7. Deployment
 
 ### Quick install
 
