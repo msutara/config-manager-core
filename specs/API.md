@@ -220,13 +220,73 @@ scheduler job `{name}.security` is rescheduled using the new value.
 
 The `warning` field is included only when non-empty (e.g. scheduler update failed).
 
+**Response 400** (invalid JSON body):
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Invalid JSON body",
+    "details": {}
+  }
+}
+```
+
+**Response 400** (trailing data):
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Request body must contain exactly one JSON object",
+    "details": {}
+  }
+}
+```
+
+**Response 400** (missing key):
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "key is required",
+    "details": {}
+  }
+}
+```
+
 **Response 400** (invalid key / value):
 
 ```json
 {
   "error": {
     "code": "invalid_config",
-    "message": "unknown config key: bad_key",
+    "message": "Invalid configuration value; see server logs for details",
+    "details": {}
+  }
+}
+```
+
+**Response 413** (request body too large):
+
+```json
+{
+  "error": {
+    "code": "request_too_large",
+    "message": "Request body too large",
+    "details": {}
+  }
+}
+```
+
+**Response 500** (persistence failure):
+
+```json
+{
+  "error": {
+    "code": "save_failed",
+    "message": "Config applied but failed to persist; see server logs for details",
     "details": {}
   }
 }
@@ -285,7 +345,31 @@ Trigger a job by ID.
 }
 ```
 
-**Response 400:**
+**Response 400** (invalid JSON):
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Invalid JSON body",
+    "details": {}
+  }
+}
+```
+
+**Response 400** (trailing data):
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Request body must contain exactly one JSON object",
+    "details": {}
+  }
+}
+```
+
+**Response 400** (missing job_id):
 
 ```json
 {
@@ -304,6 +388,111 @@ Trigger a job by ID.
   "error": {
     "code": "job_not_found",
     "message": "Job 'update.security' not found",
+    "details": {}
+  }
+}
+```
+
+**Response 413** (request body too large):
+
+```json
+{
+  "error": {
+    "code": "request_too_large",
+    "message": "Request body too large",
+    "details": {}
+  }
+}
+```
+
+**Response 500:**
+
+```json
+{
+  "error": {
+    "code": "trigger_failed",
+    "message": "Failed to trigger job; see server logs",
+    "details": {}
+  }
+}
+```
+
+> Also returns `500` with `"scheduler_unavailable"` if the scheduler is not
+> configured.
+
+### 4.9. `GET /api/v1/jobs/{id}/runs/latest`
+
+Returns the most recent execution record for a job. Useful for polling job
+progress after triggering via `POST /api/v1/jobs/trigger`.
+
+The `{id}` parameter uses dot-notation (e.g., `update.full`, `update.security`).
+
+**Response 200 (running):**
+
+```json
+{
+  "job_id": "update.full",
+  "status": "running",
+  "started_at": "2026-03-02T00:10:00Z"
+}
+```
+
+**Response 200 (completed):**
+
+```json
+{
+  "job_id": "update.full",
+  "status": "completed",
+  "started_at": "2026-03-02T00:10:00Z",
+  "ended_at": "2026-03-02T00:10:45Z",
+  "duration": "45s"
+}
+```
+
+**Response 200 (failed):**
+
+```json
+{
+  "job_id": "update.full",
+  "status": "failed",
+  "started_at": "2026-03-02T00:10:00Z",
+  "ended_at": "2026-03-02T00:10:03Z",
+  "error": "job failed; see server logs",
+  "duration": "3s"
+}
+```
+
+**Response 404 (no runs):**
+
+```json
+{
+  "error": {
+    "code": "no_runs",
+    "message": "No runs recorded for job 'update.full'",
+    "details": {}
+  }
+}
+```
+
+**Response 404 (job not found):**
+
+```json
+{
+  "error": {
+    "code": "job_not_found",
+    "message": "Job 'unknown' not found",
+    "details": {}
+  }
+}
+```
+
+**Response 500:**
+
+```json
+{
+  "error": {
+    "code": "scheduler_unavailable",
+    "message": "Scheduler not configured",
     "details": {}
   }
 }

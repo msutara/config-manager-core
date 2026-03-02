@@ -11,19 +11,31 @@ import (
 	"github.com/msutara/config-manager-core/plugin"
 )
 
+// JobRun records the outcome of a single job execution.
+type JobRun struct {
+	JobID     string     `json:"job_id"`
+	Status    string     `json:"status"` // "running", "completed", "failed"
+	StartedAt time.Time  `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at,omitempty"`
+	Error     string     `json:"error,omitempty"`
+	Duration  string     `json:"duration,omitempty"`
+}
+
 // Scheduler manages recurring jobs defined by plugins.
 // It is not goroutine-safe for Start/Stop — call them from the main goroutine.
 type Scheduler struct {
-	mu     sync.RWMutex
-	jobs   map[string]plugin.JobDefinition
-	cancel context.CancelFunc
-	done   chan struct{}
+	mu       sync.RWMutex
+	jobs     map[string]plugin.JobDefinition
+	lastRuns map[string]*JobRun
+	cancel   context.CancelFunc
+	done     chan struct{}
 }
 
 // New creates a new Scheduler.
 func New() *Scheduler {
 	return &Scheduler{
-		jobs: make(map[string]plugin.JobDefinition),
+		jobs:     make(map[string]plugin.JobDefinition),
+		lastRuns: make(map[string]*JobRun),
 	}
 }
 
@@ -64,7 +76,8 @@ func (s *Scheduler) ListJobs() []plugin.JobDefinition {
 	return jobs
 }
 
-// TriggerJob runs a job by ID immediately.
+// TriggerJob runs a job by ID immediately and returns its error (if any).
+// It does not track the run in lastRuns — use TriggerJobAsync for tracking.
 func (s *Scheduler) TriggerJob(id string) error {
 	s.mu.RLock()
 	j, ok := s.jobs[id]
@@ -79,6 +92,82 @@ func (s *Scheduler) TriggerJob(id string) error {
 		return fmt.Errorf("job %q has no function defined", id)
 	}
 	return j.Func()
+}
+
+// TriggerJobAsync starts a job in a background goroutine and tracks its
+// execution status. The caller can poll LatestRun to monitor progress.
+func (s *Scheduler) TriggerJobAsync(id string) error {
+	s.mu.RLock()
+	j, ok := s.jobs[id]
+	s.mu.RUnlock()
+
+	if !ok {
+		return ErrJobNotFound
+	}
+	if j.Func == nil {
+		return fmt.Errorf("job %q has no function defined", id)
+	}
+
+	now := time.Now()
+	run := &JobRun{
+		JobID:     id,
+		Status:    "running",
+		StartedAt: now,
+	}
+	s.mu.Lock()
+	s.lastRuns[id] = run
+	s.mu.Unlock()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("job panicked", "job_id", id, "panic", r)
+				end := time.Now()
+				s.finalizeRun(run, "failed", fmt.Sprintf("panic: %v", r), end)
+			}
+		}()
+		slog.Info("async job started", "job_id", id)
+		err := j.Func()
+		end := time.Now()
+		if err != nil {
+			s.finalizeRun(run, "failed", err.Error(), end)
+			slog.Error("async job failed", "job_id", id, "error", err)
+		} else {
+			s.finalizeRun(run, "completed", "", end)
+			slog.Info("async job completed", "job_id", id, "duration", run.Duration)
+		}
+	}()
+	return nil
+}
+
+// finalizeRun updates a run record under the scheduler lock. Using a
+// dedicated helper with a deferred unlock ensures the lock is always
+// released even if finalizeRun itself panics.
+func (s *Scheduler) finalizeRun(run *JobRun, status, errMsg string, end time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run.Status = status
+	run.EndedAt = &end
+	run.Error = errMsg
+	run.Duration = end.Sub(run.StartedAt).Round(time.Millisecond).String()
+}
+
+// LatestRun returns the most recent run record for a job, or nil if none.
+func (s *Scheduler) LatestRun(id string) *JobRun {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	run, ok := s.lastRuns[id]
+	if !ok {
+		return nil
+	}
+	// Return a deep copy so callers don't race with in-flight updates.
+	cp := *run
+	// Deep-copy pointer fields so callers cannot mutate scheduler internals.
+	if cp.EndedAt != nil {
+		endedAtCopy := *cp.EndedAt
+		cp.EndedAt = &endedAtCopy
+	}
+	return &cp
 }
 
 // JobExists returns true if a job with the given ID is registered.
@@ -167,8 +256,7 @@ func (s *Scheduler) run(ctx context.Context) {
 // TODO: add per-job overlap protection (skip if previous instance still running).
 func (s *Scheduler) tick(t time.Time) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+	snapshot := make([]plugin.JobDefinition, 0)
 	for _, j := range s.jobs {
 		if j.Cron == "" || j.Func == nil {
 			continue
@@ -179,19 +267,41 @@ func (s *Scheduler) tick(t time.Time) {
 			continue
 		}
 		if sched.matches(t) {
-			job := j // capture for goroutine
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("job panicked", "job_id", job.ID, "panic", r)
-					}
-				}()
-				slog.Info("cron firing job", "job_id", job.ID)
-				if err := job.Func(); err != nil {
-					slog.Error("job failed", "job_id", job.ID, "error", err)
+			snapshot = append(snapshot, j)
+		}
+	}
+	s.mu.RUnlock()
+
+	for _, job := range snapshot {
+		j := job // capture for goroutine
+		now := time.Now()
+		run := &JobRun{
+			JobID:     j.ID,
+			Status:    "running",
+			StartedAt: now,
+		}
+		s.mu.Lock()
+		s.lastRuns[j.ID] = run
+		s.mu.Unlock()
+
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("job panicked", "job_id", j.ID, "panic", r)
+					end := time.Now()
+					s.finalizeRun(run, "failed", fmt.Sprintf("panic: %v", r), end)
 				}
 			}()
-		}
+			slog.Info("cron firing job", "job_id", j.ID)
+			err := j.Func()
+			end := time.Now()
+			if err != nil {
+				s.finalizeRun(run, "failed", err.Error(), end)
+				slog.Error("job failed", "job_id", j.ID, "error", err)
+			} else {
+				s.finalizeRun(run, "completed", "", end)
+			}
+		}()
 	}
 }
 

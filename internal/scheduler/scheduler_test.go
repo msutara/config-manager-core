@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -364,4 +365,198 @@ func TestRegisterJobsInvalidCron(t *testing.T) {
 	if s.JobExists("test.badcron") {
 		t.Error("job with invalid cron should not be registered")
 	}
+}
+
+func TestTriggerJobAsync_Success(t *testing.T) {
+	s := New()
+	barrier := make(chan struct{}) // blocks job until test checks "running"
+	done := make(chan struct{})
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.async", Cron: "* * * * *", Func: func() error {
+			<-barrier // wait for test to assert "running"
+			close(done)
+			return nil
+		}},
+	})
+
+	if err := s.TriggerJobAsync("test.async"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should be running immediately (job is blocked on barrier)
+	run := s.LatestRun("test.async")
+	if run == nil {
+		t.Fatal("expected a run record")
+	}
+	if run.Status != "running" {
+		t.Errorf("status: got %q, want running", run.Status)
+	}
+
+	close(barrier) // unblock the job
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for async job")
+	}
+
+	waitForRunStatus(t, s, "test.async", "completed", 2*time.Second)
+
+	run = s.LatestRun("test.async")
+	if run.Status != "completed" {
+		t.Errorf("status after completion: got %q, want completed", run.Status)
+	}
+	if run.EndedAt == nil {
+		t.Error("ended_at should be set after completion")
+	}
+	if run.Duration == "" {
+		t.Error("duration should be set after completion")
+	}
+}
+
+func TestTriggerJobAsync_Failure(t *testing.T) {
+	s := New()
+	done := make(chan struct{})
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.fail", Func: func() error {
+			defer close(done)
+			return errors.New("boom")
+		}},
+	})
+
+	if err := s.TriggerJobAsync("test.fail"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
+
+	waitForRunStatus(t, s, "test.fail", "failed", 2*time.Second)
+
+	run := s.LatestRun("test.fail")
+	if run.Status != "failed" {
+		t.Errorf("status: got %q, want failed", run.Status)
+	}
+	if run.Error != "boom" {
+		t.Errorf("error: got %q, want boom", run.Error)
+	}
+}
+
+func TestTriggerJobAsync_Panic(t *testing.T) {
+	s := New()
+	done := make(chan struct{})
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.panic2", Func: func() error {
+			defer close(done)
+			panic("kaboom")
+		}},
+	})
+
+	if err := s.TriggerJobAsync("test.panic2"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
+
+	waitForRunStatus(t, s, "test.panic2", "failed", 2*time.Second)
+
+	run := s.LatestRun("test.panic2")
+	if run.Status != "failed" {
+		t.Errorf("status: got %q, want failed", run.Status)
+	}
+	if run.Error == "" {
+		t.Error("error should describe the panic")
+	}
+}
+
+func TestTriggerJobAsync_NotFound(t *testing.T) {
+	s := New()
+	err := s.TriggerJobAsync("missing")
+	if !errors.Is(err, ErrJobNotFound) {
+		t.Fatalf("got %v, want ErrJobNotFound", err)
+	}
+}
+
+func TestTriggerJobAsync_NilFunc(t *testing.T) {
+	s := New()
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.nilfunc", Func: nil},
+	})
+	err := s.TriggerJobAsync("test.nilfunc")
+	if err == nil {
+		t.Fatal("expected error for nil func")
+	}
+	if !strings.Contains(err.Error(), "no function defined") {
+		t.Errorf("error should mention 'no function defined', got: %v", err)
+	}
+}
+
+func TestLatestRun_NoRuns(t *testing.T) {
+	s := New()
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.noruns"},
+	})
+	run := s.LatestRun("test.noruns")
+	if run != nil {
+		t.Errorf("expected nil, got %+v", run)
+	}
+}
+
+func TestTickTracksRuns(t *testing.T) {
+	s := New()
+	done := make(chan struct{})
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{
+			ID:   "test.tickrun",
+			Cron: "* * * * *",
+			Func: func() error {
+				close(done)
+				return nil
+			},
+		},
+	})
+
+	s.tick(time.Now())
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
+
+	waitForRunStatus(t, s, "test.tickrun", "completed", 2*time.Second)
+
+	run := s.LatestRun("test.tickrun")
+	if run == nil {
+		t.Fatal("expected tick to record a run")
+	}
+	if run.Status != "completed" {
+		t.Errorf("status: got %q, want completed", run.Status)
+	}
+}
+
+// waitForRunStatus polls LatestRun until the run reaches the expected status
+// or the timeout expires. This avoids timing-sensitive sleeps.
+func waitForRunStatus(t *testing.T, s *Scheduler, jobID, want string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		run := s.LatestRun(jobID)
+		if run != nil && run.Status == want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for job %q to reach status %q", jobID, want)
 }
