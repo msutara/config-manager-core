@@ -32,6 +32,7 @@ func clearCMEnv(t *testing.T) {
 	t.Setenv("CM_LISTEN_PORT", "")
 	t.Setenv("CM_LOG_LEVEL", "")
 	t.Setenv("CM_ENABLED_PLUGINS", "")
+	t.Setenv("CM_THEME", "")
 }
 
 func TestLoadMissingFile(t *testing.T) {
@@ -526,5 +527,96 @@ func TestPathFromLoad(t *testing.T) {
 	}
 	if loaded.Path() != path {
 		t.Errorf("Path() = %q, want %q", loaded.Path(), path)
+	}
+}
+
+func TestDefaultConfig_ThemeEmpty(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Theme != "" {
+		t.Errorf("Theme: got %q, want empty", cfg.Theme)
+	}
+}
+
+func TestLoadYAML_WithTheme(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	yamlData := `listen_port: 7788
+theme: "solarized"
+`
+	if err := os.WriteFile(path, []byte(yamlData), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Theme != "solarized" {
+		t.Errorf("Theme: got %q, want %q", cfg.Theme, "solarized")
+	}
+}
+
+func TestApplyEnv_ThemeOverride(t *testing.T) {
+	clearCMEnv(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	yamlData := `theme: "solarized"
+`
+	if err := os.WriteFile(path, []byte(yamlData), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	t.Setenv("CM_THEME", "dracula")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Theme != "dracula" {
+		t.Errorf("Theme: got %q, want %q (from env)", cfg.Theme, "dracula")
+	}
+}
+
+func TestSaveLoadRoundTrip_Theme(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "theme-roundtrip.yaml")
+
+	original := DefaultConfig()
+	original.Theme = "high-contrast"
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Theme != "high-contrast" {
+		t.Errorf("Theme: got %q, want %q", loaded.Theme, "high-contrast")
+	}
+}
+
+func TestSave_EmptyThemeOmitted(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notheme.yaml")
+
+	cfg := DefaultConfig()
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(string(data), "theme:") {
+		t.Errorf("YAML should not contain 'theme:' when empty, got:\n%s", data)
 	}
 }
