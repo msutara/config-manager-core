@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -294,6 +295,11 @@ func main() {
 		)
 		model := tui.NewWithAuth(tuiPlugins, apiURL, authToken)
 		model.SetConnectionMode(connMode)
+
+		if theme := resolveTheme(cfg.Theme); theme != nil {
+			model.SetTheme(*theme)
+		}
+
 		prog := tea.NewProgram(model, tea.WithAltScreen(), tea.WithoutSignalHandler())
 
 		if !clientMode {
@@ -378,4 +384,58 @@ func probeHealth(baseURL string) bool {
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // best-effort drain for connection reuse
 	return resp.StatusCode == http.StatusOK
+}
+
+// maxThemeFileSize is the maximum allowed theme file size (1 MB).
+const maxThemeFileSize = 1 << 20
+
+// resolveTheme resolves a theme name or file path to a tui.Theme.
+// Returns nil when no theme is configured or resolution fails (falls back
+// to the TUI default). File paths must be absolute and cannot contain "..".
+func resolveTheme(name string) *tui.Theme {
+	if name == "" {
+		return nil
+	}
+
+	// Try built-in theme first.
+	if th, ok := tui.BuiltinTheme(name); ok {
+		slog.Info("using built-in theme", "name", name)
+		return &th
+	}
+
+	// Validate path: must be absolute, no traversal components.
+	// Check raw input for ".." BEFORE Clean resolves them.
+	if !filepath.IsAbs(name) || strings.Contains(name, "..") {
+		slog.Warn("invalid theme path (must be absolute, no ..)", "theme", name)
+		return nil
+	}
+	cleaned := filepath.Clean(name)
+
+	// Read file with size limit to prevent OOM from large files or devices.
+	f, err := os.Open(cleaned)
+	if err != nil {
+		slog.Warn("theme not found as built-in or file, using default", "theme", name, "error", err)
+		return nil
+	}
+	defer f.Close()
+
+	limited := io.LimitReader(f, maxThemeFileSize+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		slog.Warn("failed to read theme file, using default", "path", cleaned, "error", err)
+		return nil
+	}
+	if len(data) > maxThemeFileSize {
+		slog.Warn("theme file too large, using default", "path", cleaned, "limit", maxThemeFileSize)
+		return nil
+	}
+
+	th, err := tui.ThemeFromYAML(data)
+	if err != nil {
+		slog.Warn("invalid theme file, using default", "path", cleaned, "error", err)
+		return nil
+	}
+
+	slog.Info("loaded theme from file", "path", cleaned)
+	return &th
 }

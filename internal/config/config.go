@@ -19,6 +19,7 @@ type Config struct {
 	ListenPort     int                       `yaml:"listen_port"`
 	EnabledPlugins []string                  `yaml:"enabled_plugins"` // empty = all enabled
 	LogLevel       string                    `yaml:"log_level"`
+	Theme          string                    `yaml:"theme,omitempty"` // built-in name or file path
 	Plugins        map[string]map[string]any `yaml:"plugins,omitempty"`
 
 	path string `yaml:"-"` // file path used by Load, not serialized
@@ -143,7 +144,7 @@ func Load(path string) (*Config, error) {
 
 // applyEnv overrides config fields with environment variables when set.
 // Supported variables: CM_LISTEN_HOST, CM_LISTEN_PORT, CM_LOG_LEVEL,
-// CM_ENABLED_PLUGINS (comma-separated).
+// CM_ENABLED_PLUGINS (comma-separated), CM_THEME.
 func applyEnv(cfg *Config) {
 	if v := os.Getenv("CM_LISTEN_HOST"); v != "" {
 		cfg.ListenHost = v
@@ -175,5 +176,8 @@ func applyEnv(cfg *Config) {
 		} else {
 			slog.Warn("ignoring CM_ENABLED_PLUGINS with no valid entries", "value", v)
 		}
+	}
+	if v := os.Getenv("CM_THEME"); v != "" {
+		cfg.Theme = v
 	}
 }

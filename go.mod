@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/msutara/cm-plugin-network v0.0.0-20260228011010-2f23468e6c22
 	github.com/msutara/cm-plugin-update v0.0.0-20260301015807-430e75b6c4d7
-	github.com/msutara/config-manager-tui v0.0.0-20260302024853-d8757a656a3b
+	github.com/msutara/config-manager-tui v0.0.0-20260302143929-742d7c73ebff
 	github.com/msutara/config-manager-web v0.0.0-20260301215045-6d63afe55ea7
 	gopkg.in/yaml.v3 v3.0.1
 )
