@@ -560,3 +560,128 @@ func waitForRunStatus(t *testing.T, s *Scheduler, jobID, want string, timeout ti
 	}
 	t.Fatalf("timed out waiting for job %q to reach status %q", jobID, want)
 }
+
+func TestTickSkipsOverlappingJob(t *testing.T) {
+	s := New()
+	barrier := make(chan struct{})
+	callCount := 0
+	var mu sync.Mutex
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{
+			ID:   "test.overlap",
+			Cron: "* * * * *",
+			Func: func() error {
+				mu.Lock()
+				callCount++
+				mu.Unlock()
+				<-barrier // block until test releases
+				return nil
+			},
+		},
+	})
+
+	now := time.Now()
+
+	// First tick starts the job (blocks on barrier).
+	s.tick(now)
+	time.Sleep(20 * time.Millisecond) // let goroutine start
+
+	// Job should be running.
+	run := s.LatestRun("test.overlap")
+	if run == nil || run.Status != "running" {
+		t.Fatalf("expected running, got %v", run)
+	}
+
+	// Second tick should skip because job is still running.
+	s.tick(now.Add(time.Minute))
+	time.Sleep(20 * time.Millisecond)
+
+	mu.Lock()
+	count := callCount
+	mu.Unlock()
+	if count != 1 {
+		t.Errorf("expected 1 invocation (overlap skipped), got %d", count)
+	}
+
+	// Release the job.
+	close(barrier)
+	waitForRunStatus(t, s, "test.overlap", "completed", 2*time.Second)
+}
+
+func TestReschedule_UpdatesCache(t *testing.T) {
+	s := New()
+	done := make(chan struct{}, 1)
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{
+			ID:   "test.recache",
+			Cron: "0 3 * * *", // only 03:00
+			Func: func() error {
+				done <- struct{}{}
+				return nil
+			},
+		},
+	})
+
+	// 12:00 should not match original schedule.
+	noon := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	s.tick(noon)
+
+	select {
+	case <-done:
+		t.Error("should not fire at 12:00 with cron '0 3 * * *'")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Reschedule to every minute — cache should update.
+	if err := s.Reschedule("test.recache", "* * * * *"); err != nil {
+		t.Fatalf("reschedule: %v", err)
+	}
+
+	s.tick(noon)
+
+	select {
+	case <-done:
+		// good — rescheduled cache works
+	case <-time.After(2 * time.Second):
+		t.Fatal("job should fire after reschedule to * * * * *")
+	}
+}
+
+func TestReschedule_EmptyClearsCache(t *testing.T) {
+	s := New()
+	fired := make(chan struct{}, 1)
+
+	s.RegisterJobs([]plugin.JobDefinition{
+		{
+			ID:   "test.clearcache",
+			Cron: "* * * * *",
+			Func: func() error {
+				fired <- struct{}{}
+				return nil
+			},
+		},
+	})
+
+	// Disable via empty cron.
+	if err := s.Reschedule("test.clearcache", ""); err != nil {
+		t.Fatalf("reschedule to empty: %v", err)
+	}
+
+	s.tick(time.Now())
+
+	select {
+	case <-fired:
+		t.Error("disabled job should not fire")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Verify cache entry was removed.
+	s.mu.RLock()
+	_, cached := s.scheds["test.clearcache"]
+	s.mu.RUnlock()
+	if cached {
+		t.Error("schedule cache should be cleared after disabling")
+	}
+}

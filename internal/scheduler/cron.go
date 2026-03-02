@@ -54,12 +54,20 @@ func parseCron(expr string) (*cronSchedule, error) {
 	if err := parseField(fields[2], cs.dom[:], 1, 31); err != nil {
 		return nil, fmt.Errorf("dom: %w", err)
 	}
+	// Detect star-equivalent expressions like */1 that set all bits.
+	if !cs.domStar {
+		cs.domStar = allSet(cs.dom[:])
+	}
 	if err := parseField(fields[3], cs.month[:], 1, 12); err != nil {
 		return nil, fmt.Errorf("month: %w", err)
 	}
 	cs.dowStar = fields[4] == "*"
 	if err := parseDOWField(fields[4], cs.dow[:]); err != nil {
 		return nil, fmt.Errorf("dow: %w", err)
+	}
+	// Detect star-equivalent expressions like */1 that set all bits.
+	if !cs.dowStar {
+		cs.dowStar = allSet(cs.dow[:])
 	}
 
 	return cs, nil
@@ -204,4 +212,14 @@ func parseDOWPart(part string, bits []bool) error {
 		}
 	}
 	return nil
+}
+
+// allSet returns true if every element in bits is true.
+func allSet(bits []bool) bool {
+	for _, b := range bits {
+		if !b {
+			return false
+		}
+	}
+	return true
 }

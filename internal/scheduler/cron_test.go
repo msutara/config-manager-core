@@ -267,22 +267,77 @@ func TestParseCron_StepOnLiteralDOWSunday7(t *testing.T) {
 }
 
 func TestParseCron_DOMUnrestrictedWithRestrictedDOW(t *testing.T) {
-	// "0 0 1-31 * 1" — DOM syntactically restricted but covers all days.
-	// Per cron semantics both fields are restricted → OR semantics apply.
+	// "0 0 1-31 * 1" — DOM 1-31 covers all days, so it's star-equivalent.
+	// Star-equivalent fields use AND semantics: fires only on Mondays.
 	cs, err := parseCron("0 0 1-31 * 1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Tuesday March 3, 2026 — DOM=3 matches, DOW=2 doesn't → OR fires
-	tue := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
-	if !cs.matches(tue) {
-		t.Error("should match any day via DOM=1-31 OR semantics")
+	if !cs.domStar {
+		t.Error("domStar should be true for 1-31 (star-equivalent)")
 	}
 
-	// Monday March 2, 2026 — both DOM and DOW match
+	// Monday March 2, 2026 — DOM matches (any day) AND DOW matches (Mon) → fires
 	mon := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
 	if !cs.matches(mon) {
-		t.Error("should match Monday as well")
+		t.Error("should match Monday")
+	}
+
+	// Tuesday March 3, 2026 — DOM matches but DOW doesn't → AND fails
+	tue := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	if cs.matches(tue) {
+		t.Error("should NOT match Tuesday — 1-31 is star-equivalent, AND semantics apply")
+	}
+}
+
+func TestParseCron_StarEquivalence(t *testing.T) {
+	// "*/1" in DOM should be treated as star (AND semantics with DOW).
+	// "0 0 */1 * 1" means "every Monday" — NOT "every day OR Monday".
+	cs, err := parseCron("0 0 */1 * 1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cs.domStar {
+		t.Error("domStar should be true for */1 (star-equivalent)")
+	}
+
+	// Monday March 2, 2026 — both DOM (any) AND DOW (Mon) match → fires
+	mon := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	if !cs.matches(mon) {
+		t.Error("should match Monday")
+	}
+
+	// Wednesday March 4, 2026 — DOM matches (any day) but DOW doesn't (not Mon)
+	// With AND semantics: should NOT match (DOM=star → AND → DOW must match)
+	wed := time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)
+	if cs.matches(wed) {
+		t.Error("should NOT match Wednesday — */1 is star-equivalent, AND semantics apply")
+	}
+}
+
+func TestParseCron_DOWStarEquivalence(t *testing.T) {
+	// "0 0 15 * */1" — DOW */1 is star-equivalent → AND semantics
+	// Should only fire on 15th, not every day.
+	cs, err := parseCron("0 0 15 * */1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cs.dowStar {
+		t.Error("dowStar should be true for */1 (star-equivalent)")
+	}
+
+	// March 15 (Sunday) — DOM=15 matches → fires
+	day15 := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	if !cs.matches(day15) {
+		t.Error("should match 15th of month")
+	}
+
+	// March 4 (Wednesday) — DOM=4 doesn't match 15 → should NOT fire
+	day4 := time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)
+	if cs.matches(day4) {
+		t.Error("should NOT match day 4 — DOM restricted to 15, DOW star-equivalent")
 	}
 }
