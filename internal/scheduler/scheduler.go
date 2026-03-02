@@ -275,6 +275,7 @@ func (s *Scheduler) tick(t time.Time) {
 		}
 		sched, ok := s.scheds[j.ID]
 		if !ok {
+			slog.Warn("cron schedule missing for job; skipping", "job_id", j.ID, "cron", j.Cron)
 			continue
 		}
 		// Skip if previous invocation is still running.

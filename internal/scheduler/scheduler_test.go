@@ -585,16 +585,12 @@ func TestTickSkipsOverlappingJob(t *testing.T) {
 
 	// First tick starts the job (blocks on barrier).
 	s.tick(now)
-	time.Sleep(20 * time.Millisecond) // let goroutine start
-
-	// Job should be running.
-	run := s.LatestRun("test.overlap")
-	if run == nil || run.Status != "running" {
-		t.Fatalf("expected running, got %v", run)
-	}
+	waitForRunStatus(t, s, "test.overlap", "running", 2*time.Second)
 
 	// Second tick should skip because job is still running.
 	s.tick(now.Add(time.Minute))
+
+	// Give any (erroneous) second goroutine a moment to increment.
 	time.Sleep(20 * time.Millisecond)
 
 	mu.Lock()
