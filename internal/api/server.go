@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/msutara/config-manager-core/internal/scheduler"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
@@ -31,8 +32,10 @@ func (s *Server) Err() <-chan error {
 // JobTriggerer is satisfied by the scheduler to trigger jobs by ID.
 type JobTriggerer interface {
 	TriggerJob(id string) error
+	TriggerJobAsync(id string) error
 	JobExists(id string) bool
 	Reschedule(id, cron string) error
+	LatestRun(id string) *scheduler.JobRun
 }
 
 // ConfigProvider abstracts config persistence so the API can update
@@ -86,6 +89,7 @@ func NewServer(host string, port int, sched JobTriggerer, cfg ConfigProvider, au
 			r.Put("/plugins/{name}/settings", s.handleUpdatePluginConfig)
 			r.Get("/jobs", handleListJobs)
 			r.Post("/jobs/trigger", s.handleTriggerJob)
+			r.Get("/jobs/{id}/runs/latest", s.handleGetLatestRun)
 		})
 
 		// Plugin routes — compute handlers once, outside the registry lock.

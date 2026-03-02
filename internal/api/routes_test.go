@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,19 +12,29 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/msutara/config-manager-core/internal/scheduler"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
 // mockScheduler implements JobTriggerer for testing.
 type mockScheduler struct {
-	triggerFunc    func(id string) error
-	existsFunc     func(id string) bool
-	rescheduleFunc func(id, cron string) error
+	triggerFunc      func(id string) error
+	triggerAsyncFunc func(id string) error
+	existsFunc       func(id string) bool
+	rescheduleFunc   func(id, cron string) error
+	latestRunFunc    func(id string) *scheduler.JobRun
 }
 
 func (m *mockScheduler) TriggerJob(id string) error {
 	if m.triggerFunc != nil {
 		return m.triggerFunc(id)
+	}
+	return nil
+}
+
+func (m *mockScheduler) TriggerJobAsync(id string) error {
+	if m.triggerAsyncFunc != nil {
+		return m.triggerAsyncFunc(id)
 	}
 	return nil
 }
@@ -38,6 +49,13 @@ func (m *mockScheduler) JobExists(id string) bool {
 func (m *mockScheduler) Reschedule(id, cron string) error {
 	if m.rescheduleFunc != nil {
 		return m.rescheduleFunc(id, cron)
+	}
+	return nil
+}
+
+func (m *mockScheduler) LatestRun(id string) *scheduler.JobRun {
+	if m.latestRunFunc != nil {
+		return m.latestRunFunc(id)
 	}
 	return nil
 }
@@ -387,6 +405,35 @@ func TestHandleTriggerJobEmptyID(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("got status %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleTriggerJob_TrailingGarbage(t *testing.T) {
+	sched := &mockScheduler{}
+	srv := &Server{scheduler: sched}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/trigger",
+		bytes.NewBufferString(`{"job_id":"test"}GARBAGE`))
+	srv.handleTriggerJob(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("exactly one JSON object")) {
+		t.Errorf("expected trailing-data error message, got: %s", w.Body.String())
+	}
+}
+
+func TestHandleTriggerJob_TrailingSecondObject(t *testing.T) {
+	sched := &mockScheduler{}
+	srv := &Server{scheduler: sched}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/trigger",
+		bytes.NewBufferString(`{"job_id":"test"}{"extra":true}`))
+	srv.handleTriggerJob(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -880,6 +927,43 @@ func TestHandleUpdatePluginConfig_BodyTooLarge(t *testing.T) {
 		bytes.NewBufferString(body))
 	srv.httpServer.Handler.ServeHTTP(w, r)
 
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("got %d, want 413; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdatePluginConfig_TrailingGarbage(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(`{"key":"schedule","value":"0 4 * * *"}GARBAGE`))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("exactly one JSON object")) {
+		t.Errorf("expected trailing-data error message, got: %s", w.Body.String())
+	}
+}
+
+func TestHandleUpdatePluginConfig_TrailingSecondObject(t *testing.T) {
+	plugin.ResetForTesting()
+	mp := &mockConfigPlugin{}
+	mp.Configure(nil)
+	plugin.Register(mp)
+
+	srv := NewServer("localhost", 0, &mockScheduler{}, &mockConfigProvider{}, "", nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/plugins/mockconfig/settings",
+		bytes.NewBufferString(`{"key":"schedule","value":"0 4 * * *"}{"extra":true}`))
+	srv.httpServer.Handler.ServeHTTP(w, r)
+
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
 	}
@@ -981,5 +1065,311 @@ func TestSettingsRouteWithPluginMount_PluginRouteStillWorks(t *testing.T) {
 	}
 	if w.Body.String() != `{"status":"ok"}` {
 		t.Errorf("body: got %q, want %q", w.Body.String(), `{"status":"ok"}`)
+	}
+}
+
+func TestHandleGetLatestRun_Completed(t *testing.T) {
+	now := time.Now()
+	end := now.Add(5 * time.Second)
+	sched := &mockScheduler{
+		latestRunFunc: func(id string) *scheduler.JobRun {
+			return &scheduler.JobRun{
+				JobID:     id,
+				Status:    "completed",
+				StartedAt: now,
+				EndedAt:   &end,
+				Duration:  "5s",
+			}
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/update.full/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "update.full")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var body scheduler.JobRun
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "completed" {
+		t.Errorf("status: got %q, want completed", body.Status)
+	}
+	if body.Duration != "5s" {
+		t.Errorf("duration: got %q, want 5s", body.Duration)
+	}
+}
+
+func TestHandleGetLatestRun_NotFound(t *testing.T) {
+	sched := &mockScheduler{
+		latestRunFunc: func(_ string) *scheduler.JobRun { return nil },
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/missing/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "missing")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleGetLatestRun_Running(t *testing.T) {
+	now := time.Now()
+	sched := &mockScheduler{
+		latestRunFunc: func(id string) *scheduler.JobRun {
+			return &scheduler.JobRun{
+				JobID:     id,
+				Status:    "running",
+				StartedAt: now,
+			}
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/update.full/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "update.full")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var body scheduler.JobRun
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "running" {
+		t.Errorf("status: got %q, want running", body.Status)
+	}
+	if body.EndedAt != nil {
+		t.Errorf("ended_at should be nil for running job")
+	}
+}
+
+func TestHandleGetLatestRun_NoScheduler(t *testing.T) {
+	srv := &Server{scheduler: nil}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/any/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "any")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want 500; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleTriggerJob_UsesAsync(t *testing.T) {
+	var asyncCalled bool
+	sched := &mockScheduler{
+		triggerAsyncFunc: func(_ string) error {
+			asyncCalled = true
+			return nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	payload := `{"job_id":"test.job"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/trigger",
+		bytes.NewBufferString(payload))
+	srv.handleTriggerJob(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("got %d, want 202; body: %s", w.Code, w.Body.String())
+	}
+	if !asyncCalled {
+		t.Error("expected TriggerJobAsync to be called")
+	}
+}
+
+func TestHandleTriggerJob_AsyncFailure(t *testing.T) {
+	sched := &mockScheduler{
+		triggerAsyncFunc: func(_ string) error {
+			return errors.New("job func is nil")
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	payload := `{"job_id":"broken.job"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/trigger",
+		bytes.NewBufferString(payload))
+	srv.handleTriggerJob(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want 500; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error object, got %v", resp)
+	}
+	if errObj["code"] != "trigger_failed" {
+		t.Errorf("error code: got %q, want trigger_failed", errObj["code"])
+	}
+}
+
+func TestHandleGetLatestRun_JobNotFound(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return false },
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/missing/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "missing")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error object, got %v", resp)
+	}
+	if errObj["code"] != "job_not_found" {
+		t.Errorf("error code: got %q, want job_not_found", errObj["code"])
+	}
+}
+
+func TestHandleGetLatestRun_NoRunsShape(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc:    func(_ string) bool { return true },
+		latestRunFunc: func(_ string) *scheduler.JobRun { return nil },
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error object, got %v", resp)
+	}
+	if errObj["code"] != "no_runs" {
+		t.Errorf("error code: got %q, want no_runs", errObj["code"])
+	}
+}
+
+func TestHandleGetLatestRun_CompletedShape(t *testing.T) {
+	now := time.Now()
+	end := now.Add(2 * time.Second)
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		latestRunFunc: func(_ string) *scheduler.JobRun {
+			return &scheduler.JobRun{
+				JobID:     "test.job",
+				Status:    "completed",
+				StartedAt: now,
+				EndedAt:   &end,
+				Duration:  "2s",
+			}
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["job_id"] != "test.job" {
+		t.Errorf("job_id: got %v, want test.job", resp["job_id"])
+	}
+	if resp["status"] != "completed" {
+		t.Errorf("status: got %v, want completed", resp["status"])
+	}
+	if resp["duration"] != "2s" {
+		t.Errorf("duration: got %v, want 2s", resp["duration"])
+	}
+}
+
+func TestHandleGetLatestRun_ErrorSanitized(t *testing.T) {
+	now := time.Now()
+	end := now.Add(time.Second)
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		latestRunFunc: func(_ string) *scheduler.JobRun {
+			return &scheduler.JobRun{
+				JobID:     "test.job",
+				Status:    "failed",
+				StartedAt: now,
+				EndedAt:   &end,
+				Error:     "secret internal detail: /etc/apt/sources.list",
+				Duration:  "1s",
+			}
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs/latest", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleGetLatestRun(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["error"] != "job failed; see server logs" {
+		t.Errorf("error should be sanitized, got %q", resp["error"])
 	}
 }

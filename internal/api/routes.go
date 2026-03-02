@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -167,8 +169,25 @@ func (s *Server) handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		JobID string `json:"job_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body")
+	r.Body = http.MaxBytesReader(w, r.Body, maxTriggerBody)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body too large")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body")
+		}
+		return
+	}
+	// Reject trailing data so MaxBytesReader cannot be bypassed.
+	if err := dec.Decode(&json.RawMessage{}); err != io.EOF {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body too large")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_request", "Request body must contain exactly one JSON object")
+		}
 		return
 	}
 
@@ -188,22 +207,47 @@ func (s *Server) handleTriggerJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jid := req.JobID
-	go func() {
-		if err := s.scheduler.TriggerJob(jid); err != nil {
-			slog.Error("triggered job failed", "job_id", jid, "error", err)
-		} else {
-			slog.Info("triggered job completed", "job_id", jid)
-		}
-	}()
+	if err := s.scheduler.TriggerJobAsync(req.JobID); err != nil {
+		slog.Error("failed to trigger job", "job_id", req.JobID, "error", err)
+		writeError(w, http.StatusInternalServerError, "trigger_failed",
+			"Failed to trigger job; see server logs")
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"job_id": req.JobID,
 	})
 }
 
+func (s *Server) handleGetLatestRun(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if s.scheduler == nil {
+		writeError(w, http.StatusInternalServerError, "scheduler_unavailable", "Scheduler not configured")
+		return
+	}
+	if !s.scheduler.JobExists(id) {
+		writeError(w, http.StatusNotFound, "job_not_found",
+			"Job '"+id+"' not found")
+		return
+	}
+	run := s.scheduler.LatestRun(id)
+	if run == nil {
+		writeError(w, http.StatusNotFound, "no_runs", "No runs recorded for job '"+id+"'")
+		return
+	}
+	// Sanitize the error field to avoid leaking internal details from plugin jobs.
+	sanitized := *run
+	if sanitized.Error != "" {
+		sanitized.Error = "job failed; see server logs"
+	}
+	writeJSON(w, http.StatusOK, &sanitized)
+}
+
 // maxConfigBody is the maximum request body for config updates (64 KB).
 const maxConfigBody = 64 << 10
+
+// maxTriggerBody is the maximum request body for job trigger requests (1 KB).
+const maxTriggerBody = 1 << 10
 
 // getConfigurablePlugin resolves a plugin by name and asserts it implements
 // Configurable. Returns the Configurable and true on success; writes an
@@ -274,8 +318,24 @@ func (s *Server) updatePluginConfig(w http.ResponseWriter, r *http.Request, name
 		Key   string `json:"key"`
 		Value any    `json:"value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body")
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body too large")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body")
+		}
+		return
+	}
+	// Reject trailing data so MaxBytesReader cannot be bypassed.
+	if err := dec.Decode(&json.RawMessage{}); err != io.EOF {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body too large")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_request", "Request body must contain exactly one JSON object")
+		}
 		return
 	}
 	if req.Key == "" {
@@ -286,8 +346,10 @@ func (s *Server) updatePluginConfig(w http.ResponseWriter, r *http.Request, name
 	// Validate that schedule values are strings before accepting.
 	if req.Key == "schedule" {
 		if _, ok := req.Value.(string); !ok {
+			slog.Warn("schedule value type mismatch",
+				"plugin", name, "type", fmt.Sprintf("%T", req.Value))
 			writeError(w, http.StatusBadRequest, "invalid_config",
-				"schedule value must be a string")
+				"Invalid configuration value; see server logs for details")
 			return
 		}
 	}
@@ -304,7 +366,10 @@ func (s *Server) updatePluginConfig(w http.ResponseWriter, r *http.Request, name
 			writeError(w, http.StatusInternalServerError, "save_failed",
 				"Config applied but failed to persist; see server logs for details")
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+			slog.Warn("plugin config validation failed",
+				"plugin", name, "key", req.Key, "error", err)
+			writeError(w, http.StatusBadRequest, "invalid_config",
+				"Invalid configuration value; see server logs for details")
 		}
 		return
 	}
