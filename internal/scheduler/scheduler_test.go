@@ -564,17 +564,12 @@ func waitForRunStatus(t *testing.T, s *Scheduler, jobID, want string, timeout ti
 func TestTickSkipsOverlappingJob(t *testing.T) {
 	s := New()
 	barrier := make(chan struct{})
-	callCount := 0
-	var mu sync.Mutex
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{
 			ID:   "test.overlap",
 			Cron: "* * * * *",
 			Func: func() error {
-				mu.Lock()
-				callCount++
-				mu.Unlock()
 				<-barrier // block until test releases
 				return nil
 			},
@@ -587,17 +582,16 @@ func TestTickSkipsOverlappingJob(t *testing.T) {
 	s.tick(now)
 	waitForRunStatus(t, s, "test.overlap", "running", 2*time.Second)
 
+	// Capture the run recorded by the first tick.
+	firstRun := s.LatestRun("test.overlap")
+
 	// Second tick should skip because job is still running.
 	s.tick(now.Add(time.Minute))
 
-	// Give any (erroneous) second goroutine a moment to increment.
-	time.Sleep(20 * time.Millisecond)
-
-	mu.Lock()
-	count := callCount
-	mu.Unlock()
-	if count != 1 {
-		t.Errorf("expected 1 invocation (overlap skipped), got %d", count)
+	// tick() records lastRuns synchronously — verify no new run was created.
+	secondRun := s.LatestRun("test.overlap")
+	if secondRun.StartedAt != firstRun.StartedAt {
+		t.Error("second tick should not have started a new run")
 	}
 
 	// Release the job.
@@ -624,10 +618,9 @@ func TestReschedule_UpdatesCache(t *testing.T) {
 	noon := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	s.tick(noon)
 
-	select {
-	case <-done:
-		t.Error("should not fire at 12:00 with cron '0 3 * * *'")
-	case <-time.After(50 * time.Millisecond):
+	// tick() updates lastRuns synchronously; job should not be runnable at 12:00.
+	if got := s.LatestRun("test.recache"); got != nil {
+		t.Fatalf("job should not run at 12:00 with cron '0 3 * * *', got last run %v", *got)
 	}
 
 	// Reschedule to every minute — cache should update.
@@ -667,10 +660,9 @@ func TestReschedule_EmptyClearsCache(t *testing.T) {
 
 	s.tick(time.Now())
 
-	select {
-	case <-fired:
-		t.Error("disabled job should not fire")
-	case <-time.After(50 * time.Millisecond):
+	// tick() updates lastRuns synchronously; disabled job should not run.
+	if got := s.LatestRun("test.clearcache"); got != nil {
+		t.Fatalf("disabled job should not fire, got last run %v", *got)
 	}
 
 	// Verify cache entry was removed.
