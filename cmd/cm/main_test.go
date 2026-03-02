@@ -144,7 +144,7 @@ func TestResolveTheme_FileExactlyAtLimit(t *testing.T) {
 }
 
 func TestResolveTheme_DirectoryPath(t *testing.T) {
-	// Opening a directory succeeds but reading it as file content should fail.
+	// Directories are rejected because resolveTheme only accepts regular files.
 	dir := t.TempDir()
 	th := resolveTheme(dir)
 	if th != nil {
