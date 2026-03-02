@@ -419,14 +419,24 @@ func resolveTheme(name string) *tui.Theme {
 	}
 	defer f.Close()
 
-	limited := io.LimitReader(f, maxThemeFileSize+1)
-	data, err := io.ReadAll(limited)
+	// Reject non-regular files (FIFOs, device nodes) that could block reads.
+	info, err := f.Stat()
 	if err != nil {
-		slog.Warn("failed to read theme file, using default", "path", cleaned, "error", err)
+		slog.Warn("failed to stat theme file, using default", "path", cleaned, "error", err)
 		return nil
 	}
-	if len(data) > maxThemeFileSize {
-		slog.Warn("theme file too large, using default", "path", cleaned, "limit", maxThemeFileSize)
+	if !info.Mode().IsRegular() {
+		slog.Warn("theme path is not a regular file, using default", "path", cleaned, "mode", info.Mode())
+		return nil
+	}
+	if info.Size() > int64(maxThemeFileSize) {
+		slog.Warn("theme file too large, using default", "path", cleaned, "size", info.Size(), "limit", maxThemeFileSize)
+		return nil
+	}
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		slog.Warn("failed to read theme file, using default", "path", cleaned, "error", err)
 		return nil
 	}
 
