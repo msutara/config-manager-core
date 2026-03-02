@@ -559,6 +559,8 @@ theme: "solarized"
 }
 
 func TestApplyEnv_ThemeOverride(t *testing.T) {
+	clearCMEnv(t)
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 

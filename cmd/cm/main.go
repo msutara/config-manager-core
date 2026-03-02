@@ -434,9 +434,13 @@ func resolveTheme(name string) *tui.Theme {
 		return nil
 	}
 
-	data, err := io.ReadAll(f)
+	data, err := io.ReadAll(io.LimitReader(f, int64(maxThemeFileSize)+1))
 	if err != nil {
 		slog.Warn("failed to read theme file, using default", "path", cleaned, "error", err)
+		return nil
+	}
+	if len(data) > maxThemeFileSize {
+		slog.Warn("theme file too large (post-read check), using default", "path", cleaned, "limit", maxThemeFileSize)
 		return nil
 	}
 
