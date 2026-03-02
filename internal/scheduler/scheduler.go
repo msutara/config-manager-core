@@ -26,6 +26,7 @@ type JobRun struct {
 type Scheduler struct {
 	mu       sync.RWMutex
 	jobs     map[string]plugin.JobDefinition
+	scheds   map[string]*cronSchedule // cached parsed cron expressions
 	lastRuns map[string]*JobRun
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -35,6 +36,7 @@ type Scheduler struct {
 func New() *Scheduler {
 	return &Scheduler{
 		jobs:     make(map[string]plugin.JobDefinition),
+		scheds:   make(map[string]*cronSchedule),
 		lastRuns: make(map[string]*JobRun),
 	}
 }
@@ -54,10 +56,12 @@ func (s *Scheduler) RegisterJobs(jobs []plugin.JobDefinition) {
 			continue
 		}
 		if j.Cron != "" {
-			if _, err := parseCron(j.Cron); err != nil {
+			sched, err := parseCron(j.Cron)
+			if err != nil {
 				slog.Warn("job registration skipped: invalid cron", "job_id", j.ID, "cron", j.Cron, "error", err)
 				continue
 			}
+			s.scheds[j.ID] = sched
 		}
 		s.jobs[j.ID] = j
 		slog.Info("job registered", "job_id", j.ID, "cron", j.Cron)
@@ -204,8 +208,11 @@ func (s *Scheduler) Stop() {
 
 // Reschedule updates a job's cron expression. Pass an empty string to disable.
 func (s *Scheduler) Reschedule(id, cron string) error {
+	var sched *cronSchedule
 	if cron != "" {
-		if _, err := parseCron(cron); err != nil {
+		var err error
+		sched, err = parseCron(cron)
+		if err != nil {
 			return fmt.Errorf("invalid cron %q: %w", cron, err)
 		}
 	}
@@ -219,6 +226,11 @@ func (s *Scheduler) Reschedule(id, cron string) error {
 	}
 	j.Cron = cron
 	s.jobs[id] = j
+	if sched != nil {
+		s.scheds[id] = sched
+	} else {
+		delete(s.scheds, id)
+	}
 	slog.Info("job rescheduled", "job_id", id, "cron", cron)
 	return nil
 }
@@ -252,8 +264,8 @@ func (s *Scheduler) run(ctx context.Context) {
 	}
 }
 
-// tick fires all jobs whose cron expression matches the given time.
-// TODO: add per-job overlap protection (skip if previous instance still running).
+// tick fires all jobs whose cron schedule matches the given time.
+// Jobs already running from a previous tick are skipped (overlap protection).
 func (s *Scheduler) tick(t time.Time) {
 	s.mu.RLock()
 	snapshot := make([]plugin.JobDefinition, 0)
@@ -261,9 +273,14 @@ func (s *Scheduler) tick(t time.Time) {
 		if j.Cron == "" || j.Func == nil {
 			continue
 		}
-		sched, err := parseCron(j.Cron)
-		if err != nil {
-			slog.Warn("bad cron expression", "job_id", j.ID, "cron", j.Cron, "error", err)
+		sched, ok := s.scheds[j.ID]
+		if !ok {
+			slog.Warn("cron schedule missing for job; skipping", "job_id", j.ID, "cron", j.Cron)
+			continue
+		}
+		// Skip if previous invocation is still running.
+		if run, exists := s.lastRuns[j.ID]; exists && run.Status == "running" {
+			slog.Debug("skipping overlapping job", "job_id", j.ID)
 			continue
 		}
 		if sched.matches(t) {
