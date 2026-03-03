@@ -26,8 +26,8 @@ github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6T
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
 github.com/msutara/cm-plugin-network v0.0.0-20260303155211-57c3c157e943 h1:/CZJfB/NJ1k+jP0jNXUH1rqR6hAC2wmOI3DBZVEQH8c=
 github.com/msutara/cm-plugin-network v0.0.0-20260303155211-57c3c157e943/go.mod h1:gH2489bbikv5S0Vhbo6IMh7e6LjzzOhEfu5ctXdqkmQ=
-github.com/msutara/cm-plugin-update v0.0.0-20260303155211-d68eab3f0dda h1:4YgHmIZzn1et8f3tITRcfFLn2iN6ZazbhMzLSH+h0wM=
-github.com/msutara/cm-plugin-update v0.0.0-20260303155211-d68eab3f0dda/go.mod h1:y3NsGDXlRm9AOOtDWnYcEzpb+NBiTjVkh2c3iuzGwz0=
+github.com/msutara/cm-plugin-update v0.0.0-20260303164732-4c771c647958 h1:Z9FSNGr6CZO0vWwJNt4qfom2Zsb4j4SK2V8+CYownDU=
+github.com/msutara/cm-plugin-update v0.0.0-20260303164732-4c771c647958/go.mod h1:y3NsGDXlRm9AOOtDWnYcEzpb+NBiTjVkh2c3iuzGwz0=
 github.com/msutara/config-manager-tui v0.0.0-20260303155745-7c19a1f0633c h1:eSnu+Ub90x/fwZcnAzfpO0Wiho0IMimO0ddcEnbmEH8=
 github.com/msutara/config-manager-tui v0.0.0-20260303155745-7c19a1f0633c/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
 github.com/msutara/config-manager-web v0.0.0-20260303160715-47b9f4820d4b h1:9nQL/PFlcj6U1kLOFmnx4La3wDCJps7WRhcmsYnw7X4=

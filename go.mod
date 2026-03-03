@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/msutara/cm-plugin-network v0.0.0-20260303155211-57c3c157e943
-	github.com/msutara/cm-plugin-update v0.0.0-20260303155211-d68eab3f0dda
+	github.com/msutara/cm-plugin-update v0.0.0-20260303164732-4c771c647958
 	github.com/msutara/config-manager-tui v0.0.0-20260303155745-7c19a1f0633c
 	github.com/msutara/config-manager-web v0.0.0-20260303160715-47b9f4820d4b
 	gopkg.in/yaml.v3 v3.0.1
