@@ -129,7 +129,7 @@ func parseCron(expr string) (*cronSchedule, error) {
 
 // ValidateCron checks whether expr is a valid cron expression.
 // It performs full parsing including @-shortcuts and named days/months.
-// External packages (e.g., plugins) can call this at config time to reject
+// Other packages within this module can call this at config time to reject
 // invalid schedules before they reach the scheduler.
 func ValidateCron(expr string) error {
 	_, err := parseCron(expr)
