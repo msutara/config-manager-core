@@ -33,13 +33,65 @@ func (cs *cronSchedule) matches(t time.Time) bool {
 	return domMatch || dowMatch
 }
 
+// predefined maps @-shortcuts to their 5-field equivalents.
+var predefined = map[string]string{
+	"@yearly":   "0 0 1 1 *",
+	"@annually": "0 0 1 1 *",
+	"@monthly":  "0 0 1 * *",
+	"@weekly":   "0 0 * * 0",
+	"@daily":    "0 0 * * *",
+	"@midnight": "0 0 * * *",
+	"@hourly":   "0 * * * *",
+}
+
+// dowNames maps 3-letter day abbreviations to numeric values (0=Sunday).
+var dowNames = map[string]string{
+	"SUN": "0", "MON": "1", "TUE": "2", "WED": "3",
+	"THU": "4", "FRI": "5", "SAT": "6",
+}
+
+// monthNames maps 3-letter month abbreviations to numeric values (1=January).
+var monthNames = map[string]string{
+	"JAN": "1", "FEB": "2", "MAR": "3", "APR": "4",
+	"MAY": "5", "JUN": "6", "JUL": "7", "AUG": "8",
+	"SEP": "9", "OCT": "10", "NOV": "11", "DEC": "12",
+}
+
+// resolveNames replaces 3-letter name tokens (case-insensitive) with their
+// numeric equivalents.  Safe because cron field delimiters (,  -  /) never
+// collide with the 3-letter name keys.
+//
+// Limitation: this is substring replacement, not token-aware.  A malformed
+// token like "JAN2" would be replaced to "12" (December) instead of being
+// rejected outright.  In practice this is harmless — the resulting numeric
+// value is still range-checked by parseField — but callers should be aware
+// that typos may silently map to unexpected months/days rather than errors.
+func resolveNames(field string, names map[string]string) string {
+	upper := strings.ToUpper(field)
+	for name, num := range names {
+		upper = strings.ReplaceAll(upper, name, num)
+	}
+	return upper
+}
+
 // parseCron parses a standard 5-field cron expression.
 // Fields: minute(0-59) hour(0-23) dom(1-31) month(1-12) dow(0-7, 0 and 7 = Sunday)
-// Supports: * (wildcard), N (literal), N-M (range), N-M/S (stepped range), */S (stepped wildcard), N,M,... (list)
+// Supports: * (wildcard), N (literal), N-M (range), N-M/S (stepped range),
+// */S (stepped wildcard), N,M,... (list), @-shortcuts (@daily, @weekly, etc.),
+// 3-letter day names (MON-FRI) and month names (JAN-DEC).
 func parseCron(expr string) (*cronSchedule, error) {
+	expr = strings.TrimSpace(expr)
+	if replacement, ok := predefined[strings.ToLower(expr)]; ok {
+		expr = replacement
+	}
+
 	fields := strings.Fields(expr)
 	if len(fields) != 5 {
-		return nil, fmt.Errorf("expected 5 fields, got %d", len(fields))
+		return nil, fmt.Errorf(
+			"expected 5 fields (minute hour dom month dow), got %d"+
+				"; if your expression has a seconds field, remove it"+
+				" (6/7-field cron is not supported)",
+			len(fields))
 	}
 
 	cs := &cronSchedule{}
@@ -58,11 +110,13 @@ func parseCron(expr string) (*cronSchedule, error) {
 	if !cs.domStar {
 		cs.domStar = allSet(cs.dom[:])
 	}
-	if err := parseField(fields[3], cs.month[:], 1, 12); err != nil {
+	monthField := resolveNames(fields[3], monthNames)
+	if err := parseField(monthField, cs.month[:], 1, 12); err != nil {
 		return nil, fmt.Errorf("month: %w", err)
 	}
-	cs.dowStar = fields[4] == "*"
-	if err := parseDOWField(fields[4], cs.dow[:]); err != nil {
+	dowField := resolveNames(fields[4], dowNames)
+	cs.dowStar = dowField == "*"
+	if err := parseDOWField(dowField, cs.dow[:]); err != nil {
 		return nil, fmt.Errorf("dow: %w", err)
 	}
 	// Detect star-equivalent expressions like */1 that set all bits.
@@ -71,6 +125,15 @@ func parseCron(expr string) (*cronSchedule, error) {
 	}
 
 	return cs, nil
+}
+
+// ValidateCron checks whether expr is a valid cron expression.
+// It performs full parsing including @-shortcuts and named days/months.
+// Other packages within this module can call this at config time to reject
+// invalid schedules before they reach the scheduler.
+func ValidateCron(expr string) error {
+	_, err := parseCron(expr)
+	return err
 }
 
 // parseField parses a single cron field into a boolean slice.

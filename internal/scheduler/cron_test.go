@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -339,5 +340,220 @@ func TestParseCron_DOWStarEquivalence(t *testing.T) {
 	day4 := time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)
 	if cs.matches(day4) {
 		t.Error("should NOT match day 4 — DOM restricted to 15, DOW star-equivalent")
+	}
+}
+
+func TestParseCron_NamedDOW(t *testing.T) {
+	cs, err := parseCron("0 2 * * MON")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cs.dow[1] {
+		t.Error("dow[1] (Monday) should be true")
+	}
+	for d := 2; d <= 6; d++ {
+		if cs.dow[d] {
+			t.Errorf("dow[%d] should be false", d)
+		}
+	}
+	if cs.dow[0] {
+		t.Error("dow[0] (Sunday) should be false")
+	}
+}
+
+func TestParseCron_NamedDOWRange(t *testing.T) {
+	cs, err := parseCron("0 9 * * MON-FRI")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for d := 1; d <= 5; d++ {
+		if !cs.dow[d] {
+			t.Errorf("dow[%d] should be true for MON-FRI", d)
+		}
+	}
+	if cs.dow[0] {
+		t.Error("dow[0] (Sunday) should be false")
+	}
+	if cs.dow[6] {
+		t.Error("dow[6] (Saturday) should be false")
+	}
+}
+
+func TestParseCron_NamedDOWList(t *testing.T) {
+	cs, err := parseCron("0 9 * * MON,WED,FRI")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := [7]bool{false, true, false, true, false, true, false}
+	for d := 0; d < 7; d++ {
+		if cs.dow[d] != want[d] {
+			t.Errorf("dow[%d]: got %v, want %v", d, cs.dow[d], want[d])
+		}
+	}
+}
+
+func TestParseCron_NamedDOWCaseInsensitive(t *testing.T) {
+	cs, err := parseCron("0 2 * * mon")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cs.dow[1] {
+		t.Error("dow[1] (Monday) should be true for lowercase 'mon'")
+	}
+}
+
+func TestParseCron_NamedMonths(t *testing.T) {
+	cs, err := parseCron("0 0 1 JAN *")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cs.month[0] {
+		t.Error("month[0] (January) should be true")
+	}
+	for m := 1; m < 12; m++ {
+		if cs.month[m] {
+			t.Errorf("month[%d] should be false", m)
+		}
+	}
+}
+
+func TestParseCron_NamedMonthRange(t *testing.T) {
+	cs, err := parseCron("0 0 1 JAN-MAR *")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for m := 0; m < 3; m++ {
+		if !cs.month[m] {
+			t.Errorf("month[%d] should be true for JAN-MAR", m)
+		}
+	}
+	for m := 3; m < 12; m++ {
+		if cs.month[m] {
+			t.Errorf("month[%d] should be false for JAN-MAR", m)
+		}
+	}
+}
+
+func TestParseCron_Predefined(t *testing.T) {
+	cases := map[string]string{
+		"@daily":    "0 0 * * *",
+		"@midnight": "0 0 * * *",
+		"@hourly":   "0 * * * *",
+		"@weekly":   "0 0 * * 0",
+		"@monthly":  "0 0 1 * *",
+		"@yearly":   "0 0 1 1 *",
+		"@annually": "0 0 1 1 *",
+	}
+	for shortcut, equivalent := range cases {
+		t.Run(shortcut, func(t *testing.T) {
+			got, err := parseCron(shortcut)
+			if err != nil {
+				t.Fatalf("unexpected error for %s: %v", shortcut, err)
+			}
+			want, err := parseCron(equivalent)
+			if err != nil {
+				t.Fatalf("unexpected error for %s: %v", equivalent, err)
+			}
+			if got.minute != want.minute || got.hour != want.hour ||
+				got.dom != want.dom || got.month != want.month ||
+				got.dow != want.dow {
+				t.Errorf("%s should be equivalent to %s", shortcut, equivalent)
+			}
+		})
+	}
+}
+
+func TestParseCron_SixFieldError(t *testing.T) {
+	_, err := parseCron("0 0 * * * *")
+	if err == nil {
+		t.Fatal("expected error for 6-field cron")
+	}
+	if !strings.Contains(err.Error(), "seconds field") {
+		t.Errorf("error should mention seconds field, got: %v", err)
+	}
+}
+
+func TestParseCron_NamedDOWStepRange(t *testing.T) {
+	// MON-FRI/2 = Mon(1), Wed(3), Fri(5)
+	cs, err := parseCron("0 0 * * MON-FRI/2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := [7]bool{false, true, false, true, false, true, false}
+	for d := 0; d < 7; d++ {
+		if cs.dow[d] != want[d] {
+			t.Errorf("dow[%d]: got %v, want %v", d, cs.dow[d], want[d])
+		}
+	}
+}
+
+func TestValidateCron_Valid(t *testing.T) {
+	for _, expr := range []string{"0 3 * * *", "@daily", "@weekly", "0 2 * * MON", "0 0 1 JAN *"} {
+		if err := ValidateCron(expr); err != nil {
+			t.Errorf("ValidateCron(%q) = %v, want nil", expr, err)
+		}
+	}
+}
+
+func TestValidateCron_Invalid(t *testing.T) {
+	for _, expr := range []string{"0 2 * * * MON", "not cron", ""} {
+		if err := ValidateCron(expr); err == nil {
+			t.Errorf("ValidateCron(%q) = nil, want error", expr)
+		}
+	}
+}
+
+func TestParseCron_NamedMonthStepRange(t *testing.T) {
+	// JAN-MAR/2 = Jan(0), Mar(2) — skip Feb(1)
+	cs, err := parseCron("0 0 1 JAN-MAR/2 *")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := [12]bool{true, false, true}
+	for m := 0; m < 12; m++ {
+		if cs.month[m] != want[m] {
+			t.Errorf("month[%d]: got %v, want %v", m, cs.month[m], want[m])
+		}
+	}
+}
+
+func TestParseCron_DOWRange6to7(t *testing.T) {
+	// 6-7 = Sat(6) and Sun(0 via 7-normalization)
+	cs, err := parseCron("0 0 * * 6-7")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cs.dow[6] {
+		t.Error("dow[6] (Saturday) should be true")
+	}
+	if !cs.dow[0] {
+		t.Error("dow[0] (Sunday via 7) should be true")
+	}
+	for d := 1; d <= 5; d++ {
+		if cs.dow[d] {
+			t.Errorf("dow[%d] should be false", d)
+		}
+	}
+}
+
+func TestParseCron_NamedDOWMixedList(t *testing.T) {
+	// MON,3,FRI = 1,3,5
+	cs, err := parseCron("0 0 * * MON,3,FRI")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := [7]bool{false, true, false, true, false, true, false}
+	for d := 0; d < 7; d++ {
+		if cs.dow[d] != want[d] {
+			t.Errorf("dow[%d]: got %v, want %v", d, cs.dow[d], want[d])
+		}
+	}
+}
+
+func TestParseCron_NamedMonthInvalidAfterReplace(t *testing.T) {
+	// "JANX" resolves to "1X" which should fail during numeric parsing.
+	_, err := parseCron("0 0 1 JANX *")
+	if err == nil {
+		t.Fatal("expected error for invalid month token after name resolution")
 	}
 }
