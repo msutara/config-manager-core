@@ -284,7 +284,7 @@ plugins:
   update:
     schedule: "0 5 * * *"
     auto_security: true
-    security_source: "available"
+    security_source: "detected"
   network:
     dns_override: "8.8.8.8"
 `
@@ -307,8 +307,8 @@ plugins:
 	if up["auto_security"] != true {
 		t.Errorf("auto_security: got %v, want true", up["auto_security"])
 	}
-	if up["security_source"] != "available" {
-		t.Errorf("security_source: got %v, want %q", up["security_source"], "available")
+	if up["security_source"] != "detected" {
+		t.Errorf("security_source: got %v, want %q", up["security_source"], "detected")
 	}
 
 	net := cfg.PluginConfig("network")
@@ -356,7 +356,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	original.EnabledPlugins = []string{"update"}
 	original.SetPluginConfig("update", "schedule", "0 5 * * *")
 	original.SetPluginConfig("update", "auto_security", true)
-	original.SetPluginConfig("update", "security_source", "available")
+	original.SetPluginConfig("update", "security_source", "detected")
 
 	if err := original.Save(path); err != nil {
 		t.Fatalf("Save failed: %v", err)
@@ -390,8 +390,8 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	if up["auto_security"] != true {
 		t.Errorf("auto_security: got %v, want true", up["auto_security"])
 	}
-	if up["security_source"] != "available" {
-		t.Errorf("security_source: got %v, want %q", up["security_source"], "available")
+	if up["security_source"] != "detected" {
+		t.Errorf("security_source: got %v, want %q", up["security_source"], "detected")
 	}
 }
 
