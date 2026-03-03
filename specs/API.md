@@ -161,7 +161,7 @@ from any plugin-specific APIs.
   "config": {
     "schedule": "0 3 * * *",
     "auto_security": true,
-    "security_source": "available"
+    "security_source": "detected"
   }
 }
 ```
@@ -214,7 +214,7 @@ scheduler job `{name}.security` is rescheduled using the new value.
 
 ```json
 {
-  "config": {"schedule": "0 4 * * *", "auto_security": true, "security_source": "available"}
+  "config": {"schedule": "0 4 * * *", "auto_security": true, "security_source": "detected"}
 }
 ```
 
