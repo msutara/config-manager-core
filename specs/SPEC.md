@@ -69,6 +69,11 @@ Those concerns are handled by plugins and external tools.
 
 - **Scheduler:**
   - Internal scheduler for plugin-defined recurring jobs.
+  - Cron expressions parsed once and cached (not re-parsed every tick).
+  - Star-equivalent expressions (e.g., `*/1`, `1-31`) detected and handled
+    with correct AND/OR semantics per standard cron.
+  - Overlap protection: if a job is still running when the next tick fires,
+    the tick is skipped for that job.
 
 - **Config:**
   - Struct-based settings loaded from YAML file and environment.
@@ -104,6 +109,11 @@ Those concerns are handled by plugins and external tools.
   - Runs embedded (separate goroutine) alongside the TUI.
   - Listens on configurable port (default: `localhost:7788`).
   - Same plugin routes available to the embedded web UI dashboard.
+
+- **Web UI:**
+  - Optional browser-based dashboard (config-manager-web).
+  - Connects to the same REST API as the TUI.
+  - Served by the core binary when a web handler is provided (e.g., when built with config-manager-web).
 
 ---
 
