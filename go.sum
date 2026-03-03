@@ -28,8 +28,8 @@ github.com/msutara/cm-plugin-network v0.0.0-20260228011010-2f23468e6c22 h1:7BkzV
 github.com/msutara/cm-plugin-network v0.0.0-20260228011010-2f23468e6c22/go.mod h1:gH2489bbikv5S0Vhbo6IMh7e6LjzzOhEfu5ctXdqkmQ=
 github.com/msutara/cm-plugin-update v0.0.0-20260303095301-b1851e44707a h1:Ajrg1WpB2la1leOgCsWMo0YFBqw6ScKnSSdrolVGQqc=
 github.com/msutara/cm-plugin-update v0.0.0-20260303095301-b1851e44707a/go.mod h1:y3NsGDXlRm9AOOtDWnYcEzpb+NBiTjVkh2c3iuzGwz0=
-github.com/msutara/config-manager-tui v0.0.0-20260303005802-f6409b5761d9 h1:3wFwqItNdCLLao2U75P4F5wBh31cYFTpnCg6w7B81/A=
-github.com/msutara/config-manager-tui v0.0.0-20260303005802-f6409b5761d9/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
+github.com/msutara/config-manager-tui v0.0.0-20260303145928-31b4bc2d278f h1:MzeVDYznj6WxxIabofaaDsIyPBMTQmnIrYhQGA8eqOQ=
+github.com/msutara/config-manager-tui v0.0.0-20260303145928-31b4bc2d278f/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
 github.com/msutara/config-manager-web v0.0.0-20260303005802-54e5b80116b4 h1:KOv7HombQaie9ocqIrC5nMPQ0LgXJtOykWeg9+WHqtw=
 github.com/msutara/config-manager-web v0.0.0-20260303005802-54e5b80116b4/go.mod h1:/dbgk2JKgqV7QH5mVd3s/qh/vtw1KpICnH7NnybF1lg=
 github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 h1:ZK8zHtRHOkbHy6Mmr5D264iyp3TiX5OmNcI5cIARiQI=
