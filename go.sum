@@ -24,10 +24,10 @@ github.com/mattn/go-localereader v0.0.1 h1:ygSAOl7ZXTx4RdPYinUpg6W99U8jWvWi9Ye2J
 github.com/mattn/go-localereader v0.0.1/go.mod h1:8fBrzywKY7BI3czFoHkuzRoWE9C+EiG4R1k4Cjx5p88=
 github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6TULQc=
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
-github.com/msutara/cm-plugin-network v0.0.0-20260303155211-57c3c157e943 h1:/CZJfB/NJ1k+jP0jNXUH1rqR6hAC2wmOI3DBZVEQH8c=
-github.com/msutara/cm-plugin-network v0.0.0-20260303155211-57c3c157e943/go.mod h1:gH2489bbikv5S0Vhbo6IMh7e6LjzzOhEfu5ctXdqkmQ=
-github.com/msutara/cm-plugin-update v0.0.0-20260303214943-675f31d2a46d h1:8+MsDI276R0NE0fx14zxmsBN7GL0iMKUXGZ0wBpXark=
-github.com/msutara/cm-plugin-update v0.0.0-20260303214943-675f31d2a46d/go.mod h1:y3NsGDXlRm9AOOtDWnYcEzpb+NBiTjVkh2c3iuzGwz0=
+github.com/msutara/cm-plugin-network v0.0.0-20260304060805-1bff6df9e13c h1:ydPqF3hvmFan3Uf2DiXzE6VLTw1WGrD5hw2/Ndk1ZwA=
+github.com/msutara/cm-plugin-network v0.0.0-20260304060805-1bff6df9e13c/go.mod h1:KAmnINM1kzpfcKiKgRA+jzIgWdTpTTaTwPxjn20GGUY=
+github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279 h1:vM9CZCGLgB5girJ+es7+ZP26apXVcxG4VxJWZt0bnxM=
+github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279/go.mod h1:HXel1uIwx0z/f/aoDEhC2SsAOzlDaanry2b4rGDe260=
 github.com/msutara/config-manager-tui v0.0.0-20260303214952-893d96f5b643 h1:TcbzZX2IofOayUoq44Rr5RCUCMM9IoKCr6AaZoQUi0w=
 github.com/msutara/config-manager-tui v0.0.0-20260303214952-893d96f5b643/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
 github.com/msutara/config-manager-web v0.0.0-20260303215000-d451885d0b06 h1:LMy1tB//mbUgsTU7ysSCPUAe27qloun8aG0R6apqxTE=
