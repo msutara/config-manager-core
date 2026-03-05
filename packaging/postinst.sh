@@ -4,6 +4,8 @@ set -e
 # Create required directories.
 mkdir -p /var/log/cm /var/lib/cm /etc/cm
 chmod 750 /var/log/cm /var/lib/cm
+# Ensure root ownership (upgrades from pre-0.4.0 may have cm:cm).
+chown root:root /var/log/cm /var/lib/cm /etc/cm
 
 case "$1" in
     configure)
