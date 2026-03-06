@@ -28,14 +28,10 @@ github.com/msutara/cm-plugin-network v0.0.0-20260304193507-40fa473024e9 h1:inNoV
 github.com/msutara/cm-plugin-network v0.0.0-20260304193507-40fa473024e9/go.mod h1:KAmnINM1kzpfcKiKgRA+jzIgWdTpTTaTwPxjn20GGUY=
 github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279 h1:vM9CZCGLgB5girJ+es7+ZP26apXVcxG4VxJWZt0bnxM=
 github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279/go.mod h1:HXel1uIwx0z/f/aoDEhC2SsAOzlDaanry2b4rGDe260=
-github.com/msutara/config-manager-tui v0.0.0-20260303214952-893d96f5b643 h1:TcbzZX2IofOayUoq44Rr5RCUCMM9IoKCr6AaZoQUi0w=
-github.com/msutara/config-manager-tui v0.0.0-20260303214952-893d96f5b643/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
 github.com/msutara/config-manager-tui v0.0.0-20260306135154-31cf08f490f0 h1:9EA0Dy/KrZRFaYNtJcWqbKHKZLAPv0jZjIo6qhG3Dyc=
 github.com/msutara/config-manager-tui v0.0.0-20260306135154-31cf08f490f0/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
-github.com/msutara/config-manager-web v0.0.0-20260306201403-9431ee0ecd45 h1:9QgbrmzIk7gciA+94krQGFqDdVsZvCqDWs/XLjFjDr4=
-github.com/msutara/config-manager-web v0.0.0-20260306201403-9431ee0ecd45/go.mod h1:/dbgk2JKgqV7QH5mVd3s/qh/vtw1KpICnH7NnybF1lg=
-github.com/msutara/config-manager-web v0.0.0-20260306210842-f99e4bda1bad h1:6Iey16cyoCJwWkV+uBsfZc3OO/YGhtDg1d9UmYykUI0=
-github.com/msutara/config-manager-web v0.0.0-20260306210842-f99e4bda1bad/go.mod h1:/dbgk2JKgqV7QH5mVd3s/qh/vtw1KpICnH7NnybF1lg=
+github.com/msutara/config-manager-web v0.0.0-20260306235223-8d5ca5f059f6 h1:OjvS+UCR0UVwcXWQHo957LAPK4Ng8HkzgztflGfcU/E=
+github.com/msutara/config-manager-web v0.0.0-20260306235223-8d5ca5f059f6/go.mod h1:/dbgk2JKgqV7QH5mVd3s/qh/vtw1KpICnH7NnybF1lg=
 github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 h1:ZK8zHtRHOkbHy6Mmr5D264iyp3TiX5OmNcI5cIARiQI=
 github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6/go.mod h1:CJlz5H+gyd6CUWT45Oy4q24RdLyn7Md9Vj2/ldJBSIo=
 github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=
