@@ -30,8 +30,8 @@ github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279 h1:vM9CZC
 github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279/go.mod h1:HXel1uIwx0z/f/aoDEhC2SsAOzlDaanry2b4rGDe260=
 github.com/msutara/config-manager-tui v0.0.0-20260303214952-893d96f5b643 h1:TcbzZX2IofOayUoq44Rr5RCUCMM9IoKCr6AaZoQUi0w=
 github.com/msutara/config-manager-tui v0.0.0-20260303214952-893d96f5b643/go.mod h1:6uXCYslCn+w5loswIVLcMnmJ9J1osp8BeQj6scmnlYI=
-github.com/msutara/config-manager-web v0.0.0-20260306184007-65c61838145b h1:8M9ZiwVGhLwfsT3mhxlK/8uNNcAABLRqvWroC0iZ3eE=
-github.com/msutara/config-manager-web v0.0.0-20260306184007-65c61838145b/go.mod h1:/dbgk2JKgqV7QH5mVd3s/qh/vtw1KpICnH7NnybF1lg=
+github.com/msutara/config-manager-web v0.0.0-20260306191547-6bb6d909ec6a h1:XrtC96vDeyOvlsjW6ijZZXCkgwbdYkalLOT89Z/eoic=
+github.com/msutara/config-manager-web v0.0.0-20260306191547-6bb6d909ec6a/go.mod h1:/dbgk2JKgqV7QH5mVd3s/qh/vtw1KpICnH7NnybF1lg=
 github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 h1:ZK8zHtRHOkbHy6Mmr5D264iyp3TiX5OmNcI5cIARiQI=
 github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6/go.mod h1:CJlz5H+gyd6CUWT45Oy4q24RdLyn7Md9Vj2/ldJBSIo=
 github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=
