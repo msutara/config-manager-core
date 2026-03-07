@@ -5,10 +5,10 @@ go 1.24.0
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/go-chi/chi/v5 v5.2.1
-	github.com/msutara/cm-plugin-network v0.0.0-20260304193507-40fa473024e9
+	github.com/msutara/cm-plugin-network v0.0.0-20260307181640-9e4a744fc422
 	github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279
-	github.com/msutara/config-manager-tui v0.0.0-20260306135154-31cf08f490f0
-	github.com/msutara/config-manager-web v0.0.0-20260307023724-11f4158cbd3b
+	github.com/msutara/config-manager-tui v0.0.0-20260307214808-3eaa4e201eff
+	github.com/msutara/config-manager-web v0.0.0-20260307213647-9304b7f65560
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -29,6 +29,7 @@ require (
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )
