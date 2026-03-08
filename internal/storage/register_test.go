@@ -27,27 +27,36 @@ func TestNew_UnknownBackend(t *testing.T) {
 }
 
 func TestRegister_Duplicate(t *testing.T) {
-	called := 0
-	factory := func(dataDir string, maxRuns int) (JobStore, error) {
-		called++
+	var called1, called2 int
+	factory1 := func(dataDir string, maxRuns int) (JobStore, error) {
+		called1++
+		return nil, nil
+	}
+	factory2 := func(dataDir string, maxRuns int) (JobStore, error) {
+		called2++
 		return nil, nil
 	}
 
-	Register("test-dup", factory)
-	Register("test-dup", factory) // should overwrite
+	Register("test-dup", factory1)
+	Register("test-dup", factory2) // should overwrite factory1
 
 	f, ok := backends["test-dup"]
 	if !ok {
 		t.Fatal("expected test-dup to be registered")
 	}
-	// Call the factory to verify it's the latest one.
+	// Call the factory to verify it's the latest one (factory2).
 	_, _ = f(t.TempDir(), 10)
-	if called != 1 {
-		t.Errorf("factory called %d times, expected 1", called)
+	if called1 != 0 {
+		t.Errorf("factory1 called %d times, expected 0", called1)
+	}
+	if called2 != 1 {
+		t.Errorf("factory2 called %d times, expected 1", called2)
 	}
 
 	// Clean up to avoid polluting other tests.
+	mu.Lock()
 	delete(backends, "test-dup")
+	mu.Unlock()
 }
 
 func TestAvailableBackends(t *testing.T) {
