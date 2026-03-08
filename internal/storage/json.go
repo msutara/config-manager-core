@@ -106,6 +106,13 @@ func (s *JSONStore) ListRuns(jobID string, limit, offset int) ([]RunRecord, erro
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	if offset < 0 {
+		return nil, fmt.Errorf("offset must be non-negative, got %d", offset)
+	}
+	if limit < 0 {
+		return nil, fmt.Errorf("limit must be non-negative, got %d", limit)
+	}
+
 	recs := s.records[jobID]
 	if len(recs) == 0 {
 		return []RunRecord{}, nil

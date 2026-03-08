@@ -147,6 +147,24 @@ func TestListRuns_UnknownJobReturnsEmptySlice(t *testing.T) {
 	}
 }
 
+func TestListRuns_NegativeOffset(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	_, err := store.ListRuns("test.job", 10, -1)
+	if err == nil {
+		t.Fatal("expected error for negative offset")
+	}
+}
+
+func TestListRuns_NegativeLimit(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	_, err := store.ListRuns("test.job", -1, 0)
+	if err == nil {
+		t.Fatal("expected error for negative limit")
+	}
+}
+
 func TestPrune(t *testing.T) {
 	store, _ := newTestStore(t)
 
