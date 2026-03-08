@@ -198,7 +198,11 @@ func main() {
 		slog.Error("failed to initialize storage backend", "backend", cfg.StorageBackend, "error", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			slog.Error("failed to close storage backend", "backend", cfg.StorageBackend, "error", err)
+		}
+	}()
 	sched := scheduler.New(store)
 	sched.RegisterJobs(plugin.AllJobs())
 	sched.LoadHistory()

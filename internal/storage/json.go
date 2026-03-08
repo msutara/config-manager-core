@@ -226,6 +226,12 @@ func (s *JSONStore) loadLocked() error {
 		return fmt.Errorf("read history file: %w", err)
 	}
 
+	if len(data) > maxHistoryFileSize {
+		slog.Warn("job history file too large after read, starting fresh",
+			"path", s.path, "size", len(data), "limit", maxHistoryFileSize)
+		return nil
+	}
+
 	var flat []RunRecord
 	if err := json.Unmarshal(data, &flat); err != nil {
 		slog.Warn("job history file corrupt, starting fresh", "path", s.path, "error", err)

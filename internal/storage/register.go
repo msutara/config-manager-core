@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -17,7 +18,14 @@ var (
 // Register adds a storage backend factory. Called from init() in each
 // backend file (json.go, and optionally sqlite.go when built with
 // -tags sqlite). Duplicate names silently overwrite the previous factory.
+// Panics if name is empty or f is nil to catch misuse at init time.
 func Register(name string, f Factory) {
+	if strings.TrimSpace(name) == "" {
+		panic("storage.Register: name must not be empty")
+	}
+	if f == nil {
+		panic("storage.Register: factory must not be nil")
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	backends[name] = f
