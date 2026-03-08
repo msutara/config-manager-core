@@ -243,6 +243,55 @@ func (s *Server) handleGetLatestRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, &sanitized)
 }
 
+func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if s.scheduler == nil {
+		writeError(w, http.StatusInternalServerError, "scheduler_unavailable", "Scheduler not configured")
+		return
+	}
+	if !s.scheduler.JobExists(id) {
+		writeError(w, http.StatusNotFound, "job_not_found",
+			"Job '"+id+"' not found")
+		return
+	}
+
+	limit := 20
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "invalid_parameter", "limit must be a positive integer")
+			return
+		}
+		if n > 100 {
+			n = 100
+		}
+		limit = n
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, "invalid_parameter", "offset must be a non-negative integer")
+			return
+		}
+		offset = n
+	}
+
+	runs, err := s.scheduler.ListRuns(id, limit, offset)
+	if err != nil {
+		slog.Error("failed to list job runs", "job_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "storage_error", "Failed to retrieve job history")
+		return
+	}
+	// Sanitize error fields to avoid leaking internal details from plugin jobs.
+	for i := range runs {
+		if runs[i].Error != "" {
+			runs[i].Error = "job failed; see server logs"
+		}
+	}
+	writeJSON(w, http.StatusOK, runs)
+}
+
 // maxConfigBody is the maximum request body for config updates (64 KB).
 const maxConfigBody = 64 << 10
 

@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/msutara/config-manager-core/internal/storage"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
 func TestRegisterAndTrigger(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	called := false
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -30,7 +31,7 @@ func TestRegisterAndTrigger(t *testing.T) {
 }
 
 func TestTriggerJobNotFound(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	err := s.TriggerJob("missing")
 	if !errors.Is(err, ErrJobNotFound) {
@@ -39,7 +40,7 @@ func TestTriggerJobNotFound(t *testing.T) {
 }
 
 func TestRegisterJobsEmptyID(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "", Cron: "* * * * *"},
@@ -51,7 +52,7 @@ func TestRegisterJobsEmptyID(t *testing.T) {
 }
 
 func TestRegisterJobsDuplicate(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "dup.job", Cron: "* * * * *"},
@@ -65,7 +66,7 @@ func TestRegisterJobsDuplicate(t *testing.T) {
 }
 
 func TestTriggerJobNilFunc(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "nil.func", Cron: "* * * * *", Func: nil},
@@ -78,7 +79,7 @@ func TestTriggerJobNilFunc(t *testing.T) {
 }
 
 func TestTriggerJobReturnsError(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "fail.job", Func: func() error {
@@ -93,7 +94,7 @@ func TestTriggerJobReturnsError(t *testing.T) {
 }
 
 func TestListJobs(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "a.job"},
@@ -107,7 +108,7 @@ func TestListJobs(t *testing.T) {
 }
 
 func TestJobExists(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "exists.job"},
@@ -125,7 +126,7 @@ func TestJobExists(t *testing.T) {
 }
 
 func TestStartStop(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.Start()
 	s.Stop()
 	// Double stop should not panic
@@ -133,7 +134,7 @@ func TestStartStop(t *testing.T) {
 }
 
 func TestTickFiresJob(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -161,7 +162,7 @@ func TestTickFiresJob(t *testing.T) {
 }
 
 func TestTickSkipsNonMatching(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	fired := make(chan struct{}, 1)
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -188,7 +189,7 @@ func TestTickSkipsNonMatching(t *testing.T) {
 }
 
 func TestTickSkipsNilFunc(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.nilfunc2", Cron: "* * * * *", Func: nil},
 	})
@@ -197,7 +198,7 @@ func TestTickSkipsNilFunc(t *testing.T) {
 }
 
 func TestTickSkipsEmptyCron(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	fired := make(chan struct{}, 1)
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -222,7 +223,7 @@ func TestTickSkipsEmptyCron(t *testing.T) {
 }
 
 func TestTickJobError(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -251,7 +252,7 @@ func TestTickJobError(t *testing.T) {
 }
 
 func TestTickInvalidCron(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	// Bypass validation by directly inserting an invalid cron
 	s.mu.Lock()
@@ -267,7 +268,7 @@ func TestTickInvalidCron(t *testing.T) {
 }
 
 func TestDoubleStartIsNoop(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.Start()
 	s.Start() // should be no-op
 	s.Stop()
@@ -275,7 +276,7 @@ func TestDoubleStartIsNoop(t *testing.T) {
 }
 
 func TestReschedule(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.resched", Cron: "0 3 * * *", Func: func() error { return nil }},
 	})
@@ -293,7 +294,7 @@ func TestReschedule(t *testing.T) {
 }
 
 func TestReschedule_NotFound(t *testing.T) {
-	s := New()
+	s := New(nil)
 	err := s.Reschedule("nonexistent", "* * * * *")
 	if !errors.Is(err, ErrJobNotFound) {
 		t.Errorf("expected ErrJobNotFound, got %v", err)
@@ -301,7 +302,7 @@ func TestReschedule_NotFound(t *testing.T) {
 }
 
 func TestReschedule_InvalidCron(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.bad", Cron: "0 3 * * *", Func: func() error { return nil }},
 	})
@@ -313,7 +314,7 @@ func TestReschedule_InvalidCron(t *testing.T) {
 }
 
 func TestReschedule_EmptyDisables(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.disable", Cron: "0 3 * * *", Func: func() error { return nil }},
 	})
@@ -331,7 +332,7 @@ func TestReschedule_EmptyDisables(t *testing.T) {
 }
 
 func TestTickJobPanicRecovery(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	done := make(chan struct{})
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -356,7 +357,7 @@ func TestTickJobPanicRecovery(t *testing.T) {
 }
 
 func TestRegisterJobsInvalidCron(t *testing.T) {
-	s := New()
+	s := New(nil)
 
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.badcron", Cron: "not valid", Func: func() error { return nil }},
@@ -368,7 +369,7 @@ func TestRegisterJobsInvalidCron(t *testing.T) {
 }
 
 func TestTriggerJobAsync_Success(t *testing.T) {
-	s := New()
+	s := New(nil)
 	barrier := make(chan struct{}) // blocks job until test checks "running"
 	done := make(chan struct{})
 
@@ -416,7 +417,7 @@ func TestTriggerJobAsync_Success(t *testing.T) {
 }
 
 func TestTriggerJobAsync_Failure(t *testing.T) {
-	s := New()
+	s := New(nil)
 	done := make(chan struct{})
 
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -448,7 +449,7 @@ func TestTriggerJobAsync_Failure(t *testing.T) {
 }
 
 func TestTriggerJobAsync_Panic(t *testing.T) {
-	s := New()
+	s := New(nil)
 	done := make(chan struct{})
 
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -480,7 +481,7 @@ func TestTriggerJobAsync_Panic(t *testing.T) {
 }
 
 func TestTriggerJobAsync_NotFound(t *testing.T) {
-	s := New()
+	s := New(nil)
 	err := s.TriggerJobAsync("missing")
 	if !errors.Is(err, ErrJobNotFound) {
 		t.Fatalf("got %v, want ErrJobNotFound", err)
@@ -488,7 +489,7 @@ func TestTriggerJobAsync_NotFound(t *testing.T) {
 }
 
 func TestTriggerJobAsync_NilFunc(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.nilfunc", Func: nil},
 	})
@@ -502,7 +503,7 @@ func TestTriggerJobAsync_NilFunc(t *testing.T) {
 }
 
 func TestLatestRun_NoRuns(t *testing.T) {
-	s := New()
+	s := New(nil)
 	s.RegisterJobs([]plugin.JobDefinition{
 		{ID: "test.noruns"},
 	})
@@ -513,7 +514,7 @@ func TestLatestRun_NoRuns(t *testing.T) {
 }
 
 func TestTickTracksRuns(t *testing.T) {
-	s := New()
+	s := New(nil)
 	done := make(chan struct{})
 
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -562,7 +563,7 @@ func waitForRunStatus(t *testing.T, s *Scheduler, jobID, want string, timeout ti
 }
 
 func TestTickSkipsOverlappingJob(t *testing.T) {
-	s := New()
+	s := New(nil)
 	barrier := make(chan struct{})
 
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -600,7 +601,7 @@ func TestTickSkipsOverlappingJob(t *testing.T) {
 }
 
 func TestReschedule_UpdatesCache(t *testing.T) {
-	s := New()
+	s := New(nil)
 	done := make(chan struct{}, 1)
 
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -639,7 +640,7 @@ func TestReschedule_UpdatesCache(t *testing.T) {
 }
 
 func TestReschedule_EmptyClearsCache(t *testing.T) {
-	s := New()
+	s := New(nil)
 	fired := make(chan struct{}, 1)
 
 	s.RegisterJobs([]plugin.JobDefinition{
@@ -672,4 +673,180 @@ func TestReschedule_EmptyClearsCache(t *testing.T) {
 	if cached {
 		t.Error("schedule cache should be cleared after disabling")
 	}
+}
+
+func TestListRuns_NilStore(t *testing.T) {
+	s := New(nil)
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.nilstore"},
+	})
+
+	runs, err := s.ListRuns("test.nilstore", 10, 0)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if runs == nil {
+		t.Fatal("expected non-nil empty slice")
+	}
+	if len(runs) != 0 {
+		t.Fatalf("expected 0 runs, got %d", len(runs))
+	}
+}
+
+func TestLoadHistory_EmptyStore(t *testing.T) {
+	store := &memStore{}
+	s := New(store)
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.empty"},
+	})
+
+	// LoadHistory with an empty store should succeed with no effect.
+	s.LoadHistory()
+
+	run := s.LatestRun("test.empty")
+	if run != nil {
+		t.Fatalf("expected nil, got %+v", run)
+	}
+}
+
+func TestLoadHistory_PopulatedStore(t *testing.T) {
+	now := time.Now()
+	end := now.Add(1 * time.Second)
+	store := &memStore{
+		runs: map[string][]storage.RunRecord{
+			"job.a": {
+				{JobID: "job.a", Status: "completed", StartedAt: now, EndedAt: &end, Duration: "1s"},
+			},
+			"job.b": {
+				{JobID: "job.b", Status: "failed", StartedAt: now, EndedAt: &end, Error: "boom", Duration: "1s"},
+			},
+		},
+	}
+	s := New(store)
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "job.a"},
+		{ID: "job.b"},
+	})
+
+	s.LoadHistory()
+
+	runA := s.LatestRun("job.a")
+	if runA == nil {
+		t.Fatal("expected run for job.a")
+	}
+	if runA.Status != "completed" {
+		t.Errorf("job.a status: got %q, want completed", runA.Status)
+	}
+
+	runB := s.LatestRun("job.b")
+	if runB == nil {
+		t.Fatal("expected run for job.b")
+	}
+	if runB.Status != "failed" {
+		t.Errorf("job.b status: got %q, want failed", runB.Status)
+	}
+	if runB.Error != "boom" {
+		t.Errorf("job.b error: got %q, want boom", runB.Error)
+	}
+}
+
+func TestLoadHistory_NilStore(t *testing.T) {
+	s := New(nil)
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "test.nilhistory"},
+	})
+
+	// Should be a no-op, not panic.
+	s.LoadHistory()
+
+	run := s.LatestRun("test.nilhistory")
+	if run != nil {
+		t.Fatalf("expected nil, got %+v", run)
+	}
+}
+
+func TestLoadHistory_PartialError(t *testing.T) {
+	now := time.Now()
+	end := now.Add(1 * time.Second)
+
+	store := &errStore{
+		memStore: memStore{
+			runs: map[string][]storage.RunRecord{
+				"job.ok": {
+					{JobID: "job.ok", Status: "completed", StartedAt: now, EndedAt: &end, Duration: "1s"},
+				},
+			},
+		},
+		latestRunErrs: map[string]error{
+			"job.err": errors.New("disk on fire"),
+		},
+	}
+	s := New(store)
+	s.RegisterJobs([]plugin.JobDefinition{
+		{ID: "job.ok"},
+		{ID: "job.err"},
+	})
+
+	// Should not panic even though one job's LatestRun returns an error.
+	s.LoadHistory()
+
+	// The erroring job should have no lastRun.
+	if run := s.LatestRun("job.err"); run != nil {
+		t.Errorf("expected nil for erroring job, got %+v", run)
+	}
+
+	// The successful job should have its lastRun populated.
+	runOk := s.LatestRun("job.ok")
+	if runOk == nil {
+		t.Fatal("expected run for job.ok")
+	}
+	if runOk.Status != "completed" {
+		t.Errorf("job.ok status: got %q, want completed", runOk.Status)
+	}
+}
+
+// memStore is a minimal in-memory JobStore for scheduler tests.
+type memStore struct {
+	runs map[string][]storage.RunRecord
+}
+
+func (m *memStore) SaveRun(rec storage.RunRecord) error {
+	if m.runs == nil {
+		m.runs = make(map[string][]storage.RunRecord)
+	}
+	m.runs[rec.JobID] = append(m.runs[rec.JobID], rec)
+	return nil
+}
+
+func (m *memStore) LatestRun(jobID string) (*storage.RunRecord, error) {
+	recs := m.runs[jobID]
+	if len(recs) == 0 {
+		return nil, nil
+	}
+	r := recs[len(recs)-1]
+	return &r, nil
+}
+
+func (m *memStore) ListRuns(jobID string, limit, offset int) ([]storage.RunRecord, error) {
+	recs := m.runs[jobID]
+	if len(recs) == 0 {
+		return []storage.RunRecord{}, nil
+	}
+	return recs, nil
+}
+
+func (m *memStore) Prune(jobID string, keepN int) error { return nil }
+func (m *memStore) Close() error                        { return nil }
+
+// errStore wraps memStore and returns an error for specific job IDs on LatestRun.
+type errStore struct {
+	memStore
+	latestRunErrs map[string]error
+}
+
+func (e *errStore) LatestRun(jobID string) (*storage.RunRecord, error) {
+	if err, ok := e.latestRunErrs[jobID]; ok {
+		return nil, err
+	}
+	return e.memStore.LatestRun(jobID)
 }

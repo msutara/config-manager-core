@@ -22,6 +22,12 @@ func TestDefaultConfig(t *testing.T) {
 	if len(cfg.EnabledPlugins) != 0 {
 		t.Fatalf("got %d enabled_plugins, want 0", len(cfg.EnabledPlugins))
 	}
+	if cfg.DataDir != "/var/lib/cm" {
+		t.Fatalf("got data_dir %q, want %q", cfg.DataDir, "/var/lib/cm")
+	}
+	if cfg.JobHistoryMaxRuns != 50 {
+		t.Fatalf("got job_history_max_runs %d, want %d", cfg.JobHistoryMaxRuns, 50)
+	}
 }
 
 // clearCMEnv ensures no CM_* environment variables leak into tests that
@@ -33,6 +39,9 @@ func clearCMEnv(t *testing.T) {
 	t.Setenv("CM_LOG_LEVEL", "")
 	t.Setenv("CM_ENABLED_PLUGINS", "")
 	t.Setenv("CM_THEME", "")
+	t.Setenv("CM_DATA_DIR", "")
+	t.Setenv("CM_STORAGE_BACKEND", "")
+	t.Setenv("CM_JOB_HISTORY_MAX_RUNS", "")
 }
 
 func TestLoadMissingFile(t *testing.T) {
@@ -618,5 +627,28 @@ func TestSave_EmptyThemeOmitted(t *testing.T) {
 	}
 	if strings.Contains(string(data), "theme:") {
 		t.Errorf("YAML should not contain 'theme:' when empty, got:\n%s", data)
+	}
+}
+
+func TestDefaultConfig_StorageBackend(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.StorageBackend != "json" {
+		t.Fatalf("StorageBackend: got %q, want %q", cfg.StorageBackend, "json")
+	}
+}
+
+func TestApplyEnv_StorageBackend(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nonexistent.yaml")
+
+	t.Setenv("CM_STORAGE_BACKEND", "sqlite")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.StorageBackend != "sqlite" {
+		t.Fatalf("StorageBackend: got %q, want %q (from env)", cfg.StorageBackend, "sqlite")
 	}
 }
