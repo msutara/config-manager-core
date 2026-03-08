@@ -97,6 +97,10 @@ func (s *JSONStore) LatestRun(jobID string) (*RunRecord, error) {
 		return nil, nil
 	}
 	r := recs[len(recs)-1]
+	if r.EndedAt != nil {
+		endCopy := *r.EndedAt
+		r.EndedAt = &endCopy
+	}
 	return &r, nil
 }
 
@@ -118,9 +122,14 @@ func (s *JSONStore) ListRuns(jobID string, limit, offset int) ([]RunRecord, erro
 		return []RunRecord{}, nil
 	}
 
-	// Build newest-first slice.
+	// Build newest-first slice with deep-copied pointer fields so callers
+	// cannot mutate internal cache state via shared pointers.
 	filtered := make([]RunRecord, len(recs))
 	for i, r := range recs {
+		if r.EndedAt != nil {
+			endCopy := *r.EndedAt
+			r.EndedAt = &endCopy
+		}
 		filtered[len(recs)-1-i] = r
 	}
 

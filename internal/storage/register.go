@@ -32,7 +32,14 @@ func New(name, dataDir string, maxRuns int) (JobStore, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown storage backend: %q (available: %s)", name, availableBackends())
 	}
-	return f(dataDir, maxRuns)
+	store, err := f(dataDir, maxRuns)
+	if err != nil {
+		return nil, err
+	}
+	if store == nil {
+		return nil, fmt.Errorf("storage backend %q returned nil store without error", name)
+	}
+	return store, nil
 }
 
 func availableBackends() string {
