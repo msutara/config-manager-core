@@ -1,6 +1,9 @@
 package storage
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // Factory creates a JobStore of a specific backend type.
 type Factory func(dataDir string, maxRuns int) (JobStore, error)
@@ -32,5 +35,6 @@ func availableBackends() string {
 	for k := range backends {
 		names = append(names, k)
 	}
+	sort.Strings(names)
 	return fmt.Sprintf("%v", names)
 }

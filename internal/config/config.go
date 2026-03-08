@@ -193,7 +193,7 @@ func applyEnv(cfg *Config) {
 		cfg.StorageBackend = v
 	}
 	if v := os.Getenv("CM_JOB_HISTORY_MAX_RUNS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			cfg.JobHistoryMaxRuns = n
 		} else {
 			slog.Warn("ignoring invalid CM_JOB_HISTORY_MAX_RUNS", "value", v)

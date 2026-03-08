@@ -652,3 +652,19 @@ func TestApplyEnv_StorageBackend(t *testing.T) {
 		t.Fatalf("StorageBackend: got %q, want %q (from env)", cfg.StorageBackend, "sqlite")
 	}
 }
+
+func TestApplyEnv_MaxRunsZeroUnlimited(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nonexistent.yaml")
+
+	t.Setenv("CM_JOB_HISTORY_MAX_RUNS", "0")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.JobHistoryMaxRuns != 0 {
+		t.Fatalf("JobHistoryMaxRuns: got %d, want 0 (unlimited)", cfg.JobHistoryMaxRuns)
+	}
+}

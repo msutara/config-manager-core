@@ -78,8 +78,8 @@ Those concerns are handled by plugins and external tools.
     startup, the latest run for each job is restored from disk so
     `LatestRun()` works immediately after restart.
   - Automatic pruning keeps the most recent N records per job
-    (`job_history_max_runs`, default 50). Atomic writes (temp + rename)
-    prevent corruption on crash.
+    (`job_history_max_runs`, default 50). Atomic writes (temp + fsync + rename)
+    help avoid partial writes and reduce the risk of corruption on crash.
 
 - **Config:**
   - Struct-based settings loaded from YAML file and environment.

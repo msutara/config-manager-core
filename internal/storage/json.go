@@ -36,6 +36,9 @@ type JSONStore struct {
 // I/O errors, non-regular file). Corrupt or oversized JSON files are recovered
 // by logging a warning and starting fresh.
 func NewJSONStore(path string, maxPerJob int) (*JSONStore, error) {
+	if maxPerJob < 0 {
+		return nil, fmt.Errorf("maxPerJob must be >= 0, got %d", maxPerJob)
+	}
 	s := &JSONStore{
 		path:    path,
 		maxN:    maxPerJob,
@@ -242,6 +245,11 @@ func (s *JSONStore) writeLocked(records map[string][]RunRecord) error {
 		return err
 	}
 	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
 		f.Close()
 		os.Remove(tmp)
 		return err

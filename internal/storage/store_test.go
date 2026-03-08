@@ -439,6 +439,16 @@ func TestNewJSONStore_ReadError(t *testing.T) {
 	}
 }
 
+func TestNewJSONStore_NegativeMaxPerJob(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "job_history.json")
+
+	_, err := NewJSONStore(path, -1)
+	if err == nil {
+		t.Fatal("expected error for negative maxPerJob")
+	}
+}
+
 func TestSaveRun_CacheRollbackOnWriteFailure(t *testing.T) {
 	// Create a store with an initial record.
 	store, _ := newTestStore(t)
