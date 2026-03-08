@@ -235,6 +235,18 @@ func (s *JSONStore) loadLocked() error {
 	for _, r := range flat {
 		s.records[r.JobID] = append(s.records[r.JobID], r)
 	}
+
+	// Enforce per-job limit on load so that lowered config or externally
+	// modified files don't expose more records than maxN.
+	if s.maxN > 0 {
+		for jobID, recs := range s.records {
+			if len(recs) > s.maxN {
+				start := len(recs) - s.maxN
+				s.records[jobID] = append([]RunRecord(nil), recs[start:]...)
+			}
+		}
+	}
+
 	return nil
 }
 

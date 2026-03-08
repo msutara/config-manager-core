@@ -189,6 +189,10 @@ func main() {
 	}
 
 	// Initialize scheduler with persistent job history store.
+	if strings.TrimSpace(cfg.DataDir) == "" {
+		slog.Error("invalid configuration: data_dir must not be empty")
+		os.Exit(1)
+	}
 	store, err := storage.New(cfg.StorageBackend, cfg.DataDir, cfg.JobHistoryMaxRuns)
 	if err != nil {
 		slog.Error("failed to initialize storage backend", "backend", cfg.StorageBackend, "error", err)
