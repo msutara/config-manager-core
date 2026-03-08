@@ -213,7 +213,7 @@ func (s *JSONStore) loadLocked() error {
 		return fmt.Errorf("stat history file: %w", err)
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("history file is not a regular file")
+		return fmt.Errorf("history file %q (mode %v) is not a regular file", s.path, info.Mode())
 	}
 	if info.Size() > maxHistoryFileSize {
 		slog.Warn("job history file too large, starting fresh",
