@@ -20,7 +20,8 @@ var (
 // -tags sqlite). Duplicate names silently overwrite the previous factory.
 // Panics if name is empty or f is nil to catch misuse at init time.
 func Register(name string, f Factory) {
-	if strings.TrimSpace(name) == "" {
+	name = strings.TrimSpace(name)
+	if name == "" {
 		panic("storage.Register: name must not be empty")
 	}
 	if f == nil {

@@ -40,7 +40,9 @@ func TestRegister_Duplicate(t *testing.T) {
 	Register("test-dup", factory1)
 	Register("test-dup", factory2) // should overwrite factory1
 
+	mu.RLock()
 	f, ok := backends["test-dup"]
+	mu.RUnlock()
 	if !ok {
 		t.Fatal("expected test-dup to be registered")
 	}
@@ -61,15 +63,24 @@ func TestRegister_Duplicate(t *testing.T) {
 
 func TestAvailableBackends(t *testing.T) {
 	// The json backend is registered via init() in json.go.
-	if _, ok := backends["json"]; !ok {
+	mu.RLock()
+	_, ok := backends["json"]
+	mu.RUnlock()
+	if !ok {
 		t.Fatal("expected 'json' backend to be registered after init()")
 	}
 }
 
 func TestAvailableBackends_Empty(t *testing.T) {
+	mu.Lock()
 	saved := backends
 	backends = map[string]Factory{}
-	defer func() { backends = saved }()
+	mu.Unlock()
+	defer func() {
+		mu.Lock()
+		backends = saved
+		mu.Unlock()
+	}()
 
 	got := availableBackends()
 	if got != "none" {
@@ -78,9 +89,15 @@ func TestAvailableBackends_Empty(t *testing.T) {
 }
 
 func TestAvailableBackends_Multiple(t *testing.T) {
+	mu.Lock()
 	saved := backends
 	backends = map[string]Factory{}
-	defer func() { backends = saved }()
+	mu.Unlock()
+	defer func() {
+		mu.Lock()
+		backends = saved
+		mu.Unlock()
+	}()
 
 	noop := func(string, int) (JobStore, error) { return nil, nil }
 	Register("alpha", noop)
@@ -107,4 +124,41 @@ func TestNew_UnknownBackendErrorMessage(t *testing.T) {
 	if !strings.Contains(msg, "available:") {
 		t.Errorf("error should contain 'available:', got: %q", msg)
 	}
+}
+
+func TestNew_FactoryReturnsNil(t *testing.T) {
+	Register("nil-store", func(string, int) (JobStore, error) {
+		return nil, nil
+	})
+	defer func() {
+		mu.Lock()
+		delete(backends, "nil-store")
+		mu.Unlock()
+	}()
+
+	_, err := New("nil-store", t.TempDir(), 10)
+	if err == nil {
+		t.Fatal("expected error when factory returns nil store")
+	}
+	if !strings.Contains(err.Error(), "nil") {
+		t.Errorf("error should mention nil, got: %q", err.Error())
+	}
+}
+
+func TestRegister_PanicEmptyName(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for empty name")
+		}
+	}()
+	Register("", func(string, int) (JobStore, error) { return nil, nil })
+}
+
+func TestRegister_PanicNilFactory(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for nil factory")
+		}
+	}()
+	Register("test-nil", nil)
 }
