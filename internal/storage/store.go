@@ -16,7 +16,17 @@ type RunRecord struct {
 type JobStore interface {
 	SaveRun(rec RunRecord) error
 	LatestRun(jobID string) (*RunRecord, error)
+
+	// ListRuns returns run records for the given job in reverse chronological
+	// order (newest first by StartedAt). Pagination semantics:
+	//   - offset: number of records to skip from the start of the ordered set.
+	//   - limit:  maximum number of records to return after applying offset.
+	//             If limit == 0, all remaining records are returned.
+	//   - Both offset and limit must be non-negative; implementations should
+	//     return an error for negative values.
+	// Returns an empty (non-nil) slice when no records match.
 	ListRuns(jobID string, limit, offset int) ([]RunRecord, error)
+
 	Prune(jobID string, keepN int) error
 	Close() error
 }

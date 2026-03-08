@@ -35,6 +35,7 @@ func Register(name string, f Factory) {
 // New creates a JobStore using the named backend. Returns an error if the
 // backend is not registered (e.g., requesting "sqlite" on a slim build).
 func New(name, dataDir string, maxRuns int) (JobStore, error) {
+	name = strings.TrimSpace(name)
 	mu.RLock()
 	f, ok := backends[name]
 	mu.RUnlock()
