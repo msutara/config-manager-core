@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/msutara/config-manager-core/internal/storage"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
@@ -28,16 +29,19 @@ type Scheduler struct {
 	jobs     map[string]plugin.JobDefinition
 	scheds   map[string]*cronSchedule // cached parsed cron expressions
 	lastRuns map[string]*JobRun
+	store    storage.JobStore
 	cancel   context.CancelFunc
 	done     chan struct{}
 }
 
-// New creates a new Scheduler.
-func New() *Scheduler {
+// New creates a new Scheduler. If store is non-nil, job execution history
+// is persisted across restarts.
+func New(store storage.JobStore) *Scheduler {
 	return &Scheduler{
 		jobs:     make(map[string]plugin.JobDefinition),
 		scheds:   make(map[string]*cronSchedule),
 		lastRuns: make(map[string]*JobRun),
+		store:    store,
 	}
 }
 
@@ -154,6 +158,13 @@ func (s *Scheduler) finalizeRun(run *JobRun, status, errMsg string, end time.Tim
 	run.EndedAt = &end
 	run.Error = errMsg
 	run.Duration = end.Sub(run.StartedAt).Round(time.Millisecond).String()
+
+	if s.store != nil {
+		rec := runToRecord(run)
+		if err := s.store.SaveRun(rec); err != nil {
+			slog.Error("failed to persist job run", "job_id", run.JobID, "error", err)
+		}
+	}
 }
 
 // LatestRun returns the most recent run record for a job, or nil if none.
@@ -324,3 +335,59 @@ func (s *Scheduler) tick(t time.Time) {
 
 // ErrJobNotFound is returned when a job ID is not in the registry.
 var ErrJobNotFound = errors.New("job not found")
+
+// ListRuns returns historical run records for a job from the persistent store.
+func (s *Scheduler) ListRuns(id string, limit, offset int) ([]storage.RunRecord, error) {
+	if s.store == nil {
+		return []storage.RunRecord{}, nil
+	}
+	return s.store.ListRuns(id, limit, offset)
+}
+
+// LoadHistory restores the latest run for each registered job from the
+// persistent store into the in-memory lastRuns map. Call after RegisterJobs
+// so that LatestRun works immediately after a restart.
+func (s *Scheduler) LoadHistory() {
+	if s.store == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for id := range s.jobs {
+		rec, err := s.store.LatestRun(id)
+		if err != nil {
+			slog.Error("failed to load history for job", "job_id", id, "error", err)
+			continue
+		}
+		if rec != nil {
+			s.lastRuns[id] = recordToRun(rec)
+		}
+	}
+	slog.Info("job history loaded from store")
+}
+
+// runToRecord converts an in-memory JobRun to a persistent RunRecord.
+func runToRecord(run *JobRun) storage.RunRecord {
+	rec := storage.RunRecord{
+		JobID:     run.JobID,
+		Status:    run.Status,
+		StartedAt: run.StartedAt,
+		EndedAt:   run.EndedAt,
+		Error:     run.Error,
+		Duration:  run.Duration,
+	}
+	return rec
+}
+
+// recordToRun converts a persistent RunRecord to an in-memory JobRun.
+func recordToRun(rec *storage.RunRecord) *JobRun {
+	return &JobRun{
+		JobID:     rec.JobID,
+		Status:    rec.Status,
+		StartedAt: rec.StartedAt,
+		EndedAt:   rec.EndedAt,
+		Error:     rec.Error,
+		Duration:  rec.Duration,
+	}
+}

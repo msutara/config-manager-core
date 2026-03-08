@@ -15,12 +15,15 @@ const defaultConfigPath = "/etc/cm/config.yaml"
 
 // Config holds the global configuration for CM Core.
 type Config struct {
-	ListenHost     string                    `yaml:"listen_host"`
-	ListenPort     int                       `yaml:"listen_port"`
-	EnabledPlugins []string                  `yaml:"enabled_plugins"` // empty = all enabled
-	LogLevel       string                    `yaml:"log_level"`
-	Theme          string                    `yaml:"theme,omitempty"` // built-in name or file path
-	Plugins        map[string]map[string]any `yaml:"plugins,omitempty"`
+	ListenHost        string                    `yaml:"listen_host"`
+	ListenPort        int                       `yaml:"listen_port"`
+	EnabledPlugins    []string                  `yaml:"enabled_plugins"` // empty = all enabled
+	LogLevel          string                    `yaml:"log_level"`
+	Theme             string                    `yaml:"theme,omitempty"` // built-in name or file path
+	DataDir           string                    `yaml:"data_dir,omitempty"`
+	StorageBackend    string                    `yaml:"storage_backend,omitempty"`
+	JobHistoryMaxRuns int                       `yaml:"job_history_max_runs"`
+	Plugins           map[string]map[string]any `yaml:"plugins,omitempty"`
 
 	path string `yaml:"-"` // file path used by Load, not serialized
 }
@@ -108,9 +111,12 @@ func (c *Config) Save(path string) error {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		ListenHost: "localhost",
-		ListenPort: 7788,
-		LogLevel:   "info",
+		ListenHost:        "localhost",
+		ListenPort:        7788,
+		LogLevel:          "info",
+		DataDir:           "/var/lib/cm",
+		StorageBackend:    "json",
+		JobHistoryMaxRuns: 50,
 	}
 }
 
@@ -144,7 +150,8 @@ func Load(path string) (*Config, error) {
 
 // applyEnv overrides config fields with environment variables when set.
 // Supported variables: CM_LISTEN_HOST, CM_LISTEN_PORT, CM_LOG_LEVEL,
-// CM_ENABLED_PLUGINS (comma-separated), CM_THEME.
+// CM_ENABLED_PLUGINS (comma-separated), CM_THEME, CM_DATA_DIR,
+// CM_STORAGE_BACKEND, CM_JOB_HISTORY_MAX_RUNS.
 func applyEnv(cfg *Config) {
 	if v := os.Getenv("CM_LISTEN_HOST"); v != "" {
 		cfg.ListenHost = v
@@ -179,5 +186,18 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("CM_THEME"); v != "" {
 		cfg.Theme = v
+	}
+	if v := os.Getenv("CM_DATA_DIR"); v != "" {
+		cfg.DataDir = v
+	}
+	if v := os.Getenv("CM_STORAGE_BACKEND"); v != "" {
+		cfg.StorageBackend = v
+	}
+	if v := os.Getenv("CM_JOB_HISTORY_MAX_RUNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.JobHistoryMaxRuns = n
+		} else {
+			slog.Warn("ignoring invalid CM_JOB_HISTORY_MAX_RUNS", "value", v)
+		}
 	}
 }

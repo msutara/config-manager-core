@@ -500,6 +500,102 @@ The `{id}` parameter uses dot-notation (e.g., `update.full`, `update.security`).
 
 ---
 
+### 4.10. `GET /api/v1/jobs/{id}/runs`
+
+Returns paginated execution history for a job, newest-first. History is
+persisted to disk and survives service restarts.
+
+The `{id}` parameter uses dot-notation (e.g., `update.full`, `update.security`).
+
+**Note:** The `error` field in run records is sanitized before being returned
+to clients. Internal error details are replaced with `"job failed; see server
+logs"` to avoid leaking implementation details. This matches the sanitization
+applied by the `/runs/latest` endpoint.
+
+**Query params:**
+
+| Param    | Type | Default | Description                      |
+| -------- | ---- | ------- | -------------------------------- |
+| `limit`  | int  | 20      | Max results per page (1–100)     |
+| `offset` | int  | 0       | Number of records to skip        |
+
+**Response 200:**
+
+```json
+[
+  {
+    "job_id": "update.security",
+    "status": "completed",
+    "started_at": "2026-03-02T03:00:00Z",
+    "ended_at": "2026-03-02T03:00:45Z",
+    "duration": "45s"
+  },
+  {
+    "job_id": "update.security",
+    "status": "failed",
+    "started_at": "2026-03-01T03:00:00Z",
+    "ended_at": "2026-03-01T03:00:03Z",
+    "error": "job failed; see server logs",
+    "duration": "3s"
+  }
+]
+```
+
+Returns an empty JSON array (`[]`) when no runs have been recorded.
+
+**Response 400 (invalid limit):**
+
+```json
+{
+  "error": {
+    "code": "invalid_parameter",
+    "message": "limit must be a positive integer",
+    "details": {}
+  }
+}
+```
+
+**Response 400 (invalid offset):**
+
+```json
+{
+  "error": {
+    "code": "invalid_parameter",
+    "message": "offset must be a non-negative integer",
+    "details": {}
+  }
+}
+```
+
+**Response 404 (job not found):**
+
+```json
+{
+  "error": {
+    "code": "job_not_found",
+    "message": "Job 'unknown' not found",
+    "details": {}
+  }
+}
+```
+
+**Response 500:**
+
+```json
+{
+  "error": {
+    "code": "storage_error",
+    "message": "Failed to retrieve job history",
+    "details": {}
+  }
+}
+```
+
+> Also returns `500` with `"scheduler_unavailable"` if the scheduler is not
+> configured.
+
+---
+
 ## 5. Plugin Endpoints
 
 ### 5.1. Mounting rules

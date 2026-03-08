@@ -74,6 +74,12 @@ Those concerns are handled by plugins and external tools.
     with correct AND/OR semantics per standard cron.
   - Overlap protection: if a job is still running when the next tick fires,
     the tick is skipped for that job.
+  - Job execution history persisted to a JSON file in `data_dir`. On
+    startup, the latest run for each job is restored from disk so
+    `LatestRun()` works immediately after restart.
+  - Automatic pruning keeps the most recent N records per job
+    (`job_history_max_runs`, default 50). Atomic writes (temp + fsync + rename)
+    help avoid partial writes and reduce the risk of corruption on crash.
 
 - **Config:**
   - Struct-based settings loaded from YAML file and environment.
@@ -142,3 +148,32 @@ used. Override with `--connect URL` to force a specific service endpoint.
 - Runs as a systemd service: `cm.service`.
 - Config file: `/etc/cm/config.yaml` (default path, configurable).
 - Logs: systemd journal and optional file logging.
+
+---
+
+## 9. Configuration Reference
+
+CM Core configuration can be set via YAML file (`/etc/cm/config.yaml`) or
+environment variables. Environment variables take precedence over YAML values.
+
+| Key                    | Env Var                  | Default        | Description                                                   |
+| ---------------------- | ------------------------ | -------------- | ------------------------------------------------------------- |
+| `listen_host`          | `CM_LISTEN_HOST`         | `localhost`    | Address to bind the API server                                |
+| `listen_port`          | `CM_LISTEN_PORT`         | `7788`         | Port for the API server                                       |
+| `log_level`            | `CM_LOG_LEVEL`           | `info`         | Log level (`debug`, `info`, `warn`, `error`)                  |
+| `enabled_plugins`      | `CM_ENABLED_PLUGINS`     | (all)          | Comma-separated list of plugins to enable                     |
+| `theme`                | `CM_THEME`               | (default)      | TUI theme name or absolute file path                          |
+| `data_dir`             | `CM_DATA_DIR`            | `/var/lib/cm`  | Directory for persistent data (job history, etc.)              |
+| `storage_backend`      | `CM_STORAGE_BACKEND`     | `json`         | Job history storage backend (currently only `json`)           |
+| `job_history_max_runs` | `CM_JOB_HISTORY_MAX_RUNS`| `50`           | Max run records kept per job (0 = unlimited)                  |
+
+### Storage Backend Registry
+
+Storage backends self-register via Go `init()` functions. The `json` backend
+is currently the only implemented backend and is always available. Additional
+backends (e.g., a future `sqlite` backend per issue #63) may be compiled in
+using build tags. At startup, `storage.New(name, dataDir, maxRuns)` looks up
+the named backend in the registry and returns a `JobStore` implementation.
+If the requested backend is not registered (e.g., requesting `sqlite` before
+it is implemented), startup fails with a clear error listing the available
+backends.

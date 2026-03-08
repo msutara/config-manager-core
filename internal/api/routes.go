@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/msutara/config-manager-core/internal/storage"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
@@ -241,6 +242,57 @@ func (s *Server) handleGetLatestRun(w http.ResponseWriter, r *http.Request) {
 		sanitized.Error = "job failed; see server logs"
 	}
 	writeJSON(w, http.StatusOK, &sanitized)
+}
+
+func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if s.scheduler == nil {
+		writeError(w, http.StatusInternalServerError, "scheduler_unavailable", "Scheduler not configured")
+		return
+	}
+	if !s.scheduler.JobExists(id) {
+		writeError(w, http.StatusNotFound, "job_not_found",
+			"Job '"+id+"' not found")
+		return
+	}
+
+	limit := 20
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "invalid_parameter", "limit must be a positive integer")
+			return
+		}
+		if n > 100 {
+			n = 100
+		}
+		limit = n
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, "invalid_parameter", "offset must be a non-negative integer")
+			return
+		}
+		offset = n
+	}
+
+	runs, err := s.scheduler.ListRuns(id, limit, offset)
+	if err != nil {
+		slog.Error("failed to list job runs", "job_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "storage_error", "Failed to retrieve job history")
+		return
+	}
+	// Sanitize error fields on a copy to avoid mutating cached data.
+	sanitized := make([]storage.RunRecord, len(runs))
+	copy(sanitized, runs)
+	for i := range sanitized {
+		if sanitized[i].Error != "" {
+			sanitized[i].Error = "job failed; see server logs"
+		}
+	}
+	writeJSON(w, http.StatusOK, sanitized)
 }
 
 // maxConfigBody is the maximum request body for config updates (64 KB).

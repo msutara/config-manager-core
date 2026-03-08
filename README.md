@@ -11,6 +11,7 @@ and job scheduler — all in a single binary.
 - **Headless mode** — `--headless` for systemd/daemon use (API server only)
 - **REST API** — embedded HTTP server for remote access and future web UI
 - **Job scheduler** — cron-based recurring tasks defined by plugins
+- **Job history** — execution history persisted to disk, survives restarts
 - **Single binary** — cross-compile for ARM, no runtime dependencies
 - **.deb packaging** — install with `dpkg`, systemd service included
 
@@ -70,6 +71,22 @@ make deb-all
 ./cm --config /path/to/config.yaml  # custom config
 ./cm --version                    # show version
 ```
+
+## Configuration
+
+CM Core reads configuration from `/etc/cm/config.yaml` (or the path given
+via `--config`). All settings can be overridden with environment variables.
+
+| Setting                | Env Var                   | Default       | Description                                      |
+| ---------------------- | ------------------------- | ------------- | ------------------------------------------------ |
+| `listen_host`          | `CM_LISTEN_HOST`          | `localhost`   | API server bind address                          |
+| `listen_port`          | `CM_LISTEN_PORT`          | `7788`        | API server port                                  |
+| `log_level`            | `CM_LOG_LEVEL`            | `info`        | Log verbosity (`debug`, `info`, `warn`, `error`) |
+| `data_dir`             | `CM_DATA_DIR`             | `/var/lib/cm` | Persistent data directory                        |
+| `storage_backend`      | `CM_STORAGE_BACKEND`      | `json`        | Job history backend (`json`)                     |
+| `job_history_max_runs` | `CM_JOB_HISTORY_MAX_RUNS` | `50`          | Max run records per job (`0` = unlimited)        |
+| `enabled_plugins`      | `CM_ENABLED_PLUGINS`      | (all)         | Comma-separated plugin allowlist                 |
+| `theme`                | `CM_THEME`                | (default)     | TUI theme name or absolute path                  |
 
 ## Documentation
 

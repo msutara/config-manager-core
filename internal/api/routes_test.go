@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/msutara/config-manager-core/internal/scheduler"
+	"github.com/msutara/config-manager-core/internal/storage"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
@@ -23,6 +24,7 @@ type mockScheduler struct {
 	existsFunc       func(id string) bool
 	rescheduleFunc   func(id, cron string) error
 	latestRunFunc    func(id string) *scheduler.JobRun
+	listRunsFunc     func(id string, limit, offset int) ([]storage.RunRecord, error)
 }
 
 func (m *mockScheduler) TriggerJob(id string) error {
@@ -58,6 +60,13 @@ func (m *mockScheduler) LatestRun(id string) *scheduler.JobRun {
 		return m.latestRunFunc(id)
 	}
 	return nil
+}
+
+func (m *mockScheduler) ListRuns(id string, limit, offset int) ([]storage.RunRecord, error) {
+	if m.listRunsFunc != nil {
+		return m.listRunsFunc(id, limit, offset)
+	}
+	return []storage.RunRecord{}, nil
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -1371,5 +1380,313 @@ func TestHandleGetLatestRun_ErrorSanitized(t *testing.T) {
 	}
 	if resp["error"] != "job failed; see server logs" {
 		t.Errorf("error should be sanitized, got %q", resp["error"])
+	}
+}
+
+func TestHandleListRuns_ReturnsList(t *testing.T) {
+	now := time.Now()
+	end := now.Add(1 * time.Second)
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, _, _ int) ([]storage.RunRecord, error) {
+			return []storage.RunRecord{
+				{JobID: "test.job", Status: "completed", StartedAt: now, EndedAt: &end, Duration: "1s"},
+			}, nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var body []storage.RunRecord
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("got %d runs, want 1", len(body))
+	}
+	if body[0].Status != "completed" {
+		t.Errorf("status: got %q, want completed", body[0].Status)
+	}
+}
+
+func TestHandleListRuns_RespectsLimit(t *testing.T) {
+	var capturedLimit int
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, limit, _ int) ([]storage.RunRecord, error) {
+			capturedLimit = limit
+			return []storage.RunRecord{}, nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs?limit=5", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+	if capturedLimit != 5 {
+		t.Errorf("limit: got %d, want 5", capturedLimit)
+	}
+}
+
+func TestHandleListRuns_Pagination(t *testing.T) {
+	var capturedLimit, capturedOffset int
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, limit, offset int) ([]storage.RunRecord, error) {
+			capturedLimit = limit
+			capturedOffset = offset
+			return []storage.RunRecord{}, nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs?limit=5&offset=2", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+	if capturedLimit != 5 {
+		t.Errorf("limit: got %d, want 5", capturedLimit)
+	}
+	if capturedOffset != 2 {
+		t.Errorf("offset: got %d, want 2", capturedOffset)
+	}
+}
+
+func TestHandleListRuns_UnknownJob(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return false },
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/missing/runs", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "missing")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404", w.Code)
+	}
+}
+
+func TestHandleListRuns_EmptyHistory(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, _, _ int) ([]storage.RunRecord, error) {
+			return []storage.RunRecord{}, nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+	// Must be JSON array, not null.
+	body := w.Body.String()
+	if body == "null\n" {
+		t.Error("expected empty array, got null")
+	}
+	var runs []storage.RunRecord
+	if err := json.Unmarshal(w.Body.Bytes(), &runs); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(runs) != 0 {
+		t.Errorf("expected 0 runs, got %d", len(runs))
+	}
+}
+
+func TestHandleListRuns_InvalidLimit(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs?limit=0", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleListRuns_LimitCappedAt100(t *testing.T) {
+	var capturedLimit int
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, limit, _ int) ([]storage.RunRecord, error) {
+			capturedLimit = limit
+			return []storage.RunRecord{}, nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs?limit=200", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+	if capturedLimit != 100 {
+		t.Errorf("limit: got %d, want 100 (capped)", capturedLimit)
+	}
+}
+
+func TestHandleListRuns_NoScheduler(t *testing.T) {
+	srv := &Server{scheduler: nil}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/any/runs", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "any")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want 500", w.Code)
+	}
+}
+
+func TestHandleListRuns_StorageError(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, _, _ int) ([]storage.RunRecord, error) {
+			return nil, errors.New("disk read error")
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want 500; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleListRuns_InvalidOffset(t *testing.T) {
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs?offset=-1", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleListRuns_SanitizesErrors(t *testing.T) {
+	now := time.Now()
+	end := now.Add(1 * time.Second)
+	sched := &mockScheduler{
+		existsFunc: func(_ string) bool { return true },
+		listRunsFunc: func(_ string, _, _ int) ([]storage.RunRecord, error) {
+			return []storage.RunRecord{
+				{
+					JobID:     "test.job",
+					Status:    "completed",
+					StartedAt: now,
+					EndedAt:   &end,
+					Duration:  "1s",
+				},
+				{
+					JobID:     "test.job",
+					Status:    "failed",
+					StartedAt: now,
+					EndedAt:   &end,
+					Error:     "internal: connection refused to postgres:5432",
+					Duration:  "1s",
+				},
+			}, nil
+		},
+	}
+	srv := &Server{scheduler: sched}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/test.job/runs", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test.job")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	srv.handleListRuns(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+
+	var runs []storage.RunRecord
+	if err := json.Unmarshal(w.Body.Bytes(), &runs); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("expected 2 runs, got %d", len(runs))
+	}
+
+	// Completed run should have no error field.
+	if runs[0].Error != "" {
+		t.Errorf("completed run error: got %q, want empty", runs[0].Error)
+	}
+
+	// Failed run's internal error should be sanitized.
+	if runs[1].Error != "job failed; see server logs" {
+		t.Errorf("failed run error: got %q, want %q", runs[1].Error, "job failed; see server logs")
 	}
 }

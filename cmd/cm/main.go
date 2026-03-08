@@ -26,6 +26,7 @@ import (
 	"github.com/msutara/config-manager-core/internal/config"
 	"github.com/msutara/config-manager-core/internal/logging"
 	"github.com/msutara/config-manager-core/internal/scheduler"
+	"github.com/msutara/config-manager-core/internal/storage"
 	"github.com/msutara/config-manager-core/plugin"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -187,9 +188,24 @@ func main() {
 		slog.Info("bearer auth disabled (no token file)")
 	}
 
-	// Initialize scheduler
-	sched := scheduler.New()
+	// Initialize scheduler with persistent job history store.
+	if strings.TrimSpace(cfg.DataDir) == "" {
+		slog.Error("invalid configuration: data_dir must not be empty")
+		os.Exit(1)
+	}
+	store, err := storage.New(cfg.StorageBackend, cfg.DataDir, cfg.JobHistoryMaxRuns)
+	if err != nil {
+		slog.Error("failed to initialize storage backend", "backend", cfg.StorageBackend, "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			slog.Error("failed to close storage backend", "backend", cfg.StorageBackend, "error", err)
+		}
+	}()
+	sched := scheduler.New(store)
 	sched.RegisterJobs(plugin.AllJobs())
+	sched.LoadHistory()
 
 	// Build the API base URL for the web UI client (loopback).
 	webHost := cfg.ListenHost
