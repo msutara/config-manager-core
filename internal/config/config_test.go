@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -666,5 +667,35 @@ func TestApplyEnv_MaxRunsZeroUnlimited(t *testing.T) {
 	}
 	if cfg.JobHistoryMaxRuns != 0 {
 		t.Fatalf("JobHistoryMaxRuns: got %d, want 0 (unlimited)", cfg.JobHistoryMaxRuns)
+	}
+}
+
+func TestSaveLoadRoundTrip_MaxRunsZero(t *testing.T) {
+	clearCMEnv(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	cfg := DefaultConfig()
+	cfg.JobHistoryMaxRuns = 0
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Verify YAML contains the explicit 0.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Contains(raw, []byte("job_history_max_runs: 0")) {
+		t.Errorf("YAML should contain 'job_history_max_runs: 0', got:\n%s", raw)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.JobHistoryMaxRuns != 0 {
+		t.Errorf("round-trip: got JobHistoryMaxRuns=%d, want 0", loaded.JobHistoryMaxRuns)
 	}
 }

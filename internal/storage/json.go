@@ -137,11 +137,18 @@ func (s *JSONStore) Prune(jobID string, keepN int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if keepN < 0 {
+		return fmt.Errorf("storage: keepN must be non-negative, got %d", keepN)
+	}
+
 	recs := s.records[jobID]
 	var candidate []RunRecord
-	if len(recs) > keepN {
+	switch {
+	case keepN == 0:
+		candidate = []RunRecord{}
+	case len(recs) > keepN:
 		candidate = recs[len(recs)-keepN:]
-	} else {
+	default:
 		candidate = recs
 	}
 
@@ -161,7 +168,9 @@ func (s *JSONStore) Prune(jobID string, keepN int) error {
 }
 
 // loadLocked reads records from disk into the in-memory cache. Called once
-// during NewJSONStore construction. Must be called while holding mu.
+// during NewJSONStore construction (before the store is shared) and may also be
+// reused internally. Callers must hold mu whenever the store may be accessed
+// concurrently.
 //
 // Uses fd-based stat to avoid TOCTOU races and rejects non-regular file targets
 // (directories, devices, pipes). Note: os.Open follows symlinks; the IsRegular
@@ -261,6 +270,16 @@ func (s *JSONStore) writeLocked(records map[string][]RunRecord) error {
 	if err := os.Rename(tmp, s.path); err != nil {
 		os.Remove(tmp)
 		return err
+	}
+	// Sync the directory to ensure the rename is durable on crash.
+	// Best-effort: directory fsync failures are non-fatal since the file
+	// data and metadata are already durable from f.Sync() above.
+	d, dErr := os.Open(dir)
+	if dErr == nil {
+		if syncErr := d.Sync(); syncErr != nil {
+			slog.Warn("failed to sync directory", "dir", dir, "error", syncErr)
+		}
+		d.Close()
 	}
 	return nil
 }

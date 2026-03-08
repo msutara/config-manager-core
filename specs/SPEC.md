@@ -164,14 +164,16 @@ environment variables. Environment variables take precedence over YAML values.
 | `enabled_plugins`      | `CM_ENABLED_PLUGINS`     | (all)          | Comma-separated list of plugins to enable                     |
 | `theme`                | `CM_THEME`               | (default)      | TUI theme name or absolute file path                          |
 | `data_dir`             | `CM_DATA_DIR`            | `/var/lib/cm`  | Directory for persistent data (job history, etc.)              |
-| `storage_backend`      | `CM_STORAGE_BACKEND`     | `json`         | Job history storage backend (`json`; `sqlite` with build tag) |
+| `storage_backend`      | `CM_STORAGE_BACKEND`     | `json`         | Job history storage backend (currently only `json`)           |
 | `job_history_max_runs` | `CM_JOB_HISTORY_MAX_RUNS`| `50`           | Max run records kept per job (0 = unlimited)                  |
 
 ### Storage Backend Registry
 
 Storage backends self-register via Go `init()` functions. The `json` backend
-is always available. Additional backends (e.g., `sqlite`) can be compiled in
+is currently the only implemented backend and is always available. Additional
+backends (e.g., a future `sqlite` backend per issue #63) may be compiled in
 using build tags. At startup, `storage.New(name, dataDir, maxRuns)` looks up
 the named backend in the registry and returns a `JobStore` implementation.
-If the requested backend is not registered, startup fails with a clear error
-listing the available backends.
+If the requested backend is not registered (e.g., requesting `sqlite` before
+it is implemented), startup fails with a clear error listing the available
+backends.

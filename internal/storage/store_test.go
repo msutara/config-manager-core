@@ -491,3 +491,53 @@ func TestSaveRun_CacheRollbackOnWriteFailure(t *testing.T) {
 		t.Errorf("cache has %d runs, want 1 (rollback failed)", len(runs))
 	}
 }
+
+func TestPrune_KeepZero(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	for i := 0; i < 5; i++ {
+		rec := makeRun("test.job", "completed", time.Duration(i)*time.Minute)
+		if err := store.SaveRun(rec); err != nil {
+			t.Fatalf("SaveRun: %v", err)
+		}
+	}
+
+	// Prune with keepN=0 should clear all runs for the job.
+	if err := store.Prune("test.job", 0); err != nil {
+		t.Fatalf("Prune(0): %v", err)
+	}
+
+	runs, err := store.ListRuns("test.job", 100, 0)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) != 0 {
+		t.Errorf("got %d runs after Prune(0), want 0", len(runs))
+	}
+}
+
+func TestSaveRun_UnlimitedMaxPerJob(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "job_history.json")
+
+	// maxPerJob=0 means unlimited — no auto-pruning.
+	store, err := NewJSONStore(path, 0)
+	if err != nil {
+		t.Fatalf("NewJSONStore: %v", err)
+	}
+
+	for i := 0; i < 100; i++ {
+		rec := makeRun("test.job", "completed", time.Duration(i)*time.Minute)
+		if err := store.SaveRun(rec); err != nil {
+			t.Fatalf("SaveRun[%d]: %v", i, err)
+		}
+	}
+
+	runs, err := store.ListRuns("test.job", 200, 0)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) != 100 {
+		t.Errorf("got %d runs, want 100 (unlimited should keep all)", len(runs))
+	}
+}

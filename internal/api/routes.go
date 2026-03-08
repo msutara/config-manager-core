@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/msutara/config-manager-core/internal/storage"
 	"github.com/msutara/config-manager-core/plugin"
 )
 
@@ -283,13 +284,15 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Failed to retrieve job history")
 		return
 	}
-	// Sanitize error fields to avoid leaking internal details from plugin jobs.
-	for i := range runs {
-		if runs[i].Error != "" {
-			runs[i].Error = "job failed; see server logs"
+	// Sanitize error fields on a copy to avoid mutating cached data.
+	sanitized := make([]storage.RunRecord, len(runs))
+	copy(sanitized, runs)
+	for i := range sanitized {
+		if sanitized[i].Error != "" {
+			sanitized[i].Error = "job failed; see server logs"
 		}
 	}
-	writeJSON(w, http.StatusOK, runs)
+	writeJSON(w, http.StatusOK, sanitized)
 }
 
 // maxConfigBody is the maximum request body for config updates (64 KB).
