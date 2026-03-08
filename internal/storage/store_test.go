@@ -215,6 +215,27 @@ func TestPrune_PreservesOtherJobs(t *testing.T) {
 	}
 }
 
+func TestPrune_NegativeKeepN(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	for i := 0; i < 3; i++ {
+		if err := store.SaveRun(makeRun("test.job", "completed", time.Duration(i)*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := store.Prune("test.job", -1)
+	if err == nil {
+		t.Fatal("expected error for negative keepN")
+	}
+
+	// Records should be untouched.
+	runs, _ := store.ListRuns("test.job", 100, 0)
+	if len(runs) != 3 {
+		t.Errorf("got %d runs after rejected Prune, want 3 (should be intact)", len(runs))
+	}
+}
+
 func TestSaveRun_AutoPrune(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "job_history.json")
