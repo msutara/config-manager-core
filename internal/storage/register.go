@@ -3,24 +3,32 @@ package storage
 import (
 	"fmt"
 	"sort"
+	"sync"
 )
 
 // Factory creates a JobStore of a specific backend type.
 type Factory func(dataDir string, maxRuns int) (JobStore, error)
 
-var backends = map[string]Factory{}
+var (
+	mu       sync.RWMutex
+	backends = map[string]Factory{}
+)
 
 // Register adds a storage backend factory. Called from init() in each
 // backend file (json.go, and optionally sqlite.go when built with
-// -tags sqlite).
+// -tags sqlite). Duplicate names silently overwrite the previous factory.
 func Register(name string, f Factory) {
+	mu.Lock()
+	defer mu.Unlock()
 	backends[name] = f
 }
 
 // New creates a JobStore using the named backend. Returns an error if the
 // backend is not registered (e.g., requesting "sqlite" on a slim build).
 func New(name, dataDir string, maxRuns int) (JobStore, error) {
+	mu.RLock()
 	f, ok := backends[name]
+	mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown storage backend: %q (available: %s)", name, availableBackends())
 	}
@@ -28,6 +36,8 @@ func New(name, dataDir string, maxRuns int) (JobStore, error) {
 }
 
 func availableBackends() string {
+	mu.RLock()
+	defer mu.RUnlock()
 	if len(backends) == 0 {
 		return "none"
 	}

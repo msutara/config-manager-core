@@ -249,6 +249,15 @@ func (s *JSONStore) writeLocked(records map[string][]RunRecord) error {
 		return err
 	}
 
+	if len(data) > maxHistoryFileSize {
+		slog.Warn("job history file exceeds size limit; refusing to write",
+			"path", s.path,
+			"size_bytes", len(data),
+			"max_bytes", maxHistoryFileSize,
+		)
+		return fmt.Errorf("job history file size %d exceeds limit %d", len(data), maxHistoryFileSize)
+	}
+
 	f, err := os.CreateTemp(dir, ".job-history-*.tmp")
 	if err != nil {
 		return err
