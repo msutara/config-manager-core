@@ -580,3 +580,38 @@ func TestSaveRun_UnlimitedMaxPerJob(t *testing.T) {
 		t.Errorf("got %d runs, want 100 (unlimited should keep all)", len(runs))
 	}
 }
+
+func TestNewJSONStore_TrimsOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "job_history.json")
+
+	// Write 10 records with a generous limit.
+	// Use descending ago so records are saved oldest-first (matching real usage).
+	store1, err := NewJSONStore(path, 10)
+	if err != nil {
+		t.Fatalf("NewJSONStore(10): %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		ago := time.Duration(10-i) * time.Minute // 10m, 9m, ..., 1m
+		rec := makeRun("test.job", "completed", ago)
+		if err := store1.SaveRun(rec); err != nil {
+			t.Fatalf("SaveRun[%d]: %v", i, err)
+		}
+	}
+	store1.Close()
+
+	// Reopen with a lower limit — should trim to newest 3 (last 3 appended).
+	store2, err := NewJSONStore(path, 3)
+	if err != nil {
+		t.Fatalf("NewJSONStore(3): %v", err)
+	}
+	defer store2.Close()
+
+	runs, err := store2.ListRuns("test.job", 100, 0)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) != 3 {
+		t.Fatalf("got %d runs, want 3 (should trim on load)", len(runs))
+	}
+}
