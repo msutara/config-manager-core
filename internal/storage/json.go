@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
@@ -66,6 +67,12 @@ func (s *JSONStore) SaveRun(rec RunRecord) error {
 	candidate := make([]RunRecord, len(existing)+1)
 	copy(candidate, existing)
 	candidate[len(existing)] = rec
+
+	// Maintain oldest-first ordering by StartedAt so LatestRun and ListRuns
+	// honour the interface contract regardless of insertion order.
+	sort.Slice(candidate, func(i, j int) bool {
+		return candidate[i].StartedAt.Before(candidate[j].StartedAt)
+	})
 
 	if s.maxN > 0 && len(candidate) > s.maxN {
 		candidate = candidate[len(candidate)-s.maxN:]
@@ -240,6 +247,15 @@ func (s *JSONStore) loadLocked() error {
 
 	for _, r := range flat {
 		s.records[r.JobID] = append(s.records[r.JobID], r)
+	}
+
+	// Sort each job's records oldest-first by StartedAt to maintain the
+	// invariant that LatestRun/ListRuns honour regardless of file order.
+	for jobID, recs := range s.records {
+		sort.Slice(recs, func(i, j int) bool {
+			return recs[i].StartedAt.Before(recs[j].StartedAt)
+		})
+		s.records[jobID] = recs
 	}
 
 	// Enforce per-job limit on load so that lowered config or externally
