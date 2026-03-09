@@ -18,7 +18,7 @@ single binary:
 
 **Dependency graph:**
 
-```
+```txt
 config-manager-core
 ├── config-manager-tui    (UI layer)
 ├── config-manager-web    (UI layer)
@@ -64,7 +64,7 @@ go work init ./config-manager-core ./config-manager-tui \
 
 This produces a `go.work` file:
 
-```
+```go
 go 1.24.0
 
 use (
