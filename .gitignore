@@ -25,3 +25,7 @@ cm-debug.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Go workspace (local dev only)
+go.work
+go.work.sum

@@ -100,6 +100,12 @@ via `--config`). All settings can be overridden with environment variables.
 - [PLUGIN-INTERFACE.md](specs/PLUGIN-INTERFACE.md) — plugin contract
 - [API.md](specs/API.md) — REST API specification
 
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the multi-repo development
+workflow, including Go workspace setup, integration testing, plugin
+creation, and release procedures.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
