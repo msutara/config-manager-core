@@ -7,8 +7,8 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/msutara/cm-plugin-network v0.0.0-20260308142921-11d05a98b0d1
 	github.com/msutara/cm-plugin-update v0.0.0-20260304040218-c5538751c279
-	github.com/msutara/config-manager-tui v0.0.0-20260308154931-f2e7e880d772
-	github.com/msutara/config-manager-web v0.0.0-20260308161242-814516e4f45b
+	github.com/msutara/config-manager-tui v0.0.0-20260309040726-fbc2aa027eaa
+	github.com/msutara/config-manager-web v0.0.0-20260309040726-20685c0da062
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -29,7 +29,6 @@ require (
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )
