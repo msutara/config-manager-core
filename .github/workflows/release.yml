@@ -40,14 +40,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Configure private module access
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PAT }}@github.com/msutara/".insteadOf "https://github.com/msutara/"
-        env:
-          GOPRIVATE: "github.com/msutara/*"
-          GONOSUMCHECK: "github.com/msutara/*"
-          GONOSUMDB: "github.com/msutara/*"
-
       - name: Build binary
         run: |
           mkdir -p build
@@ -55,10 +47,6 @@ jobs:
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} GOARM=${{ matrix.goarm }} \
             go build -ldflags "-s -w -X main.version=${VERSION}" \
             -o build/cm-linux-${{ matrix.binary_suffix }} ./cmd/cm
-        env:
-          GOPRIVATE: "github.com/msutara/*"
-          GONOSUMCHECK: "github.com/msutara/*"
-          GONOSUMDB: "github.com/msutara/*"
 
       - name: Install nfpm
         run: |
