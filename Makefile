@@ -5,8 +5,18 @@ APP      := cm
 VERSION  ?= $(shell (git describe --tags --always --dirty 2>/dev/null || echo dev) | sed 's/^v//')
 BUILD_DIR := build
 
-# Go build flags
-LDFLAGS := -s -w -X main.version=$(VERSION)
+# Sanitise VERSION: single-quoted printf prevents shell expansion of VERSION
+# content, tr strips everything except semver-safe characters.
+CLEAN_VERSION := $(shell printf '%s' '$(VERSION)' | tr -cd 'a-zA-Z0-9.-')
+
+# Allowed .deb architectures (validated in deb target).
+VALID_ARCHS := amd64 arm64 armhf
+
+# Go build flags — inject version into core and all plugins
+LDFLAGS := -s -w \
+	-X main.version=$(CLEAN_VERSION) \
+	-X github.com/msutara/cm-plugin-update.version=$(CLEAN_VERSION) \
+	-X github.com/msutara/cm-plugin-network.version=$(CLEAN_VERSION)
 
 # Cross-compile targets
 TARGETS := \
@@ -49,15 +59,16 @@ test:
 ## deb: Build .deb for a single ARCH (default: amd64)
 deb: build-all
 	$(eval _ARCH := $(or $(ARCH),amd64))
+	$(if $(filter $(_ARCH),$(VALID_ARCHS)),,$(error ARCH=$(_ARCH) is not valid; expected one of: $(VALID_ARCHS)))
 	$(eval _SUFFIX := $(if $(filter armhf,$(_ARCH)),armv7,$(if $(filter arm64,$(_ARCH)),arm64,amd64)))
 	cp $(BUILD_DIR)/$(APP)-linux-$(_SUFFIX) $(BUILD_DIR)/$(APP)
-	VERSION=$(VERSION) ARCH=$(_ARCH) nfpm package --packager deb --target $(BUILD_DIR)/
+	VERSION=$(CLEAN_VERSION) ARCH=$(_ARCH) nfpm package --packager deb --target $(BUILD_DIR)/
 
 ## deb-all: Build .deb packages for all architectures
 deb-all: build-all
-	cp $(BUILD_DIR)/$(APP)-linux-amd64 $(BUILD_DIR)/$(APP) && VERSION=$(VERSION) ARCH=amd64 nfpm package --packager deb --target $(BUILD_DIR)/
-	cp $(BUILD_DIR)/$(APP)-linux-arm64 $(BUILD_DIR)/$(APP) && VERSION=$(VERSION) ARCH=arm64 nfpm package --packager deb --target $(BUILD_DIR)/
-	cp $(BUILD_DIR)/$(APP)-linux-armv7 $(BUILD_DIR)/$(APP) && VERSION=$(VERSION) ARCH=armhf nfpm package --packager deb --target $(BUILD_DIR)/
+	cp $(BUILD_DIR)/$(APP)-linux-amd64 $(BUILD_DIR)/$(APP) && VERSION=$(CLEAN_VERSION) ARCH=amd64 nfpm package --packager deb --target $(BUILD_DIR)/
+	cp $(BUILD_DIR)/$(APP)-linux-arm64 $(BUILD_DIR)/$(APP) && VERSION=$(CLEAN_VERSION) ARCH=arm64 nfpm package --packager deb --target $(BUILD_DIR)/
+	cp $(BUILD_DIR)/$(APP)-linux-armv7 $(BUILD_DIR)/$(APP) && VERSION=$(CLEAN_VERSION) ARCH=armhf nfpm package --packager deb --target $(BUILD_DIR)/
 
 ## clean: Remove build artifacts
 clean:

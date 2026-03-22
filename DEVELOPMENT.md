@@ -173,8 +173,11 @@ type MyPlugin struct{}
 
 func NewMyPlugin() *MyPlugin { return &MyPlugin{} }
 
+// version is set at build time via ldflags in the core binary build.
+var version = "dev"
+
 func (p *MyPlugin) Name() string        { return "myplugin" }
-func (p *MyPlugin) Version() string     { return "0.1.0" }
+func (p *MyPlugin) Version() string     { return version }
 func (p *MyPlugin) Description() string { return "My new plugin" }
 
 func (p *MyPlugin) Routes() http.Handler {
@@ -227,6 +230,23 @@ For custom UI (write operations, special forms):
 - **TUI:** Add menu entries in `config-manager-tui/menu.go`
 - **Web:** Add route handlers in `config-manager-web/routes.go` and
   templates in `templates/`
+
+### Step 6: Update Build-Time Version Injection
+
+Plugin versions are injected via `-ldflags -X` at build time. You must
+update **both** the Makefile and the release workflow:
+
+1. **Makefile** — add a `-X` flag to the `LDFLAGS` variable:
+
+   ```makefile
+   -X github.com/msutara/cm-plugin-<name>.version=$(CLEAN_VERSION) \
+   ```
+
+2. **`.github/workflows/release.yml`** — add the same flag in the
+   build step's `-ldflags` string.
+
+Without this step, the new plugin will report `"dev"` as its version
+in release builds.
 
 ## Integration Testing
 
@@ -283,11 +303,28 @@ sudo systemctl start cm
 Or build a `.deb` for clean upgrade testing:
 
 ```bash
-make deb GOARCH=arm GOARM=7
+make deb ARCH=armhf
 scp build/cm_*_armhf.deb user@device:/tmp/
 # On device:
 sudo dpkg -i /tmp/cm_*_armhf.deb
 ```
+
+### Version Injection
+
+Plugin versions are injected at build time via `-ldflags -X`. The
+Makefile and release workflow handle this automatically. For manual
+builds, pass the flags explicitly:
+
+```bash
+go build -ldflags "-s -w \
+  -X main.version=0.4.5 \
+  -X github.com/msutara/cm-plugin-update.version=0.4.5 \
+  -X github.com/msutara/cm-plugin-network.version=0.4.5" \
+  -o build/cm ./cmd/cm
+```
+
+Without ldflags, all versions default to `"dev"`. The `make build`
+target derives the version from `git describe --tags` automatically.
 
 ## Release Process
 
