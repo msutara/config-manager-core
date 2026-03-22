@@ -44,8 +44,15 @@ jobs:
         run: |
           mkdir -p build
           VERSION=${GITHUB_REF_NAME#v}
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag format: ${GITHUB_REF_NAME} (expected vX.Y.Z)"
+            exit 1
+          fi
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} GOARM=${{ matrix.goarm }} \
-            go build -ldflags "-s -w -X main.version=${VERSION}" \
+            go build -ldflags "-s -w \
+              -X 'main.version=${VERSION}' \
+              -X 'github.com/msutara/cm-plugin-update.version=${VERSION}' \
+              -X 'github.com/msutara/cm-plugin-network.version=${VERSION}'" \
             -o build/cm-linux-${{ matrix.binary_suffix }} ./cmd/cm
 
       - name: Install nfpm
