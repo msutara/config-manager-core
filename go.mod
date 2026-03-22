@@ -5,8 +5,8 @@ go 1.24.0
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/msutara/cm-plugin-network v0.4.3
-	github.com/msutara/cm-plugin-update v0.4.4
+	github.com/msutara/cm-plugin-network v0.4.5
+	github.com/msutara/cm-plugin-update v0.4.5
 	github.com/msutara/config-manager-tui v0.4.3
 	github.com/msutara/config-manager-web v0.4.4
 	gopkg.in/yaml.v3 v3.0.1
